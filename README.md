@@ -48,41 +48,59 @@
 
 ## 🚀 Getting Started
 
+### Quick Install
+
+**Linux/macOS (Bash):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/install.sh | sudo bash
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/install.ps1 | iex
+```
+
 ### Prerequisites
 
+- Linux-based operating system
+- Root/sudo access
+- Git
+
+### Installation
+
+1. **Clone the repository**
 ```bash
-# Install Ollama
-curl https://ollama.ai/install.sh | sh
-
-# Install Podman and podman-compose
-sudo apt-get install -y podman podman-compose
-
-# Clone the repository
 git clone https://github.com/mikl0s/OBT.git
 cd OBT
 ```
 
-### Quick Start
-
-1. **Start MongoDB**
+2. **Run the automated installer**
 ```bash
-podman run -d --name mongodb -p 27017:27017 mongo:latest
+sudo ./install.sh
 ```
 
-2. **Launch OBT**
-```bash
-# Backend
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+The installer will automatically set up:
+- Python 3.10+ with required packages
+- Node.js and pnpm
+- Docker/Podman for MongoDB
+- Ollama if not already installed
 
-# Frontend
-cd frontend
-pnpm install
-pnpm dev
+### Starting OBT
+
+Simply run the start script:
+```bash
+./start.sh
 ```
 
-Visit `http://localhost:5173` to access the dashboard.
+This will:
+1. Start MongoDB in a container
+2. Launch the backend server
+3. Start the frontend development server
+4. Ensure Ollama is running
+
+The dashboard will be available at `http://localhost:5173`
+
+To stop all services gracefully, press `Ctrl+C` in the terminal where `start.sh` is running.
 
 ## 📖 Documentation
 

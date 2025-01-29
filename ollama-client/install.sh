@@ -18,6 +18,40 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to download file from GitHub if it doesn't exist
+download_github_file() {
+    local filename="$1"
+    local target_path="$2"
+    
+    if [ ! -f "$target_path" ]; then
+        echo -e "${BLUE}Downloading $filename from GitHub...${NC}"
+        local url="https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/$filename"
+        if ! curl -fsSL "$url" -o "$target_path"; then
+            echo -e "${RED}Error downloading $filename from GitHub${NC}"
+            exit 1
+        fi
+        if [ ! -f "$target_path" ]; then
+            echo -e "${RED}Failed to download $filename${NC}"
+            exit 1
+        fi
+    fi
+}
+
+# Get script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+if [ -z "$SCRIPT_DIR" ]; then
+    SCRIPT_DIR="$PWD"
+fi
+
+# Create directory if it doesn't exist
+mkdir -p "$SCRIPT_DIR"
+
+# Download required files if they don't exist
+required_files=(".env.example" "requirements.txt" "start.sh" "main.py")
+for file in "${required_files[@]}"; do
+    download_github_file "$file" "$SCRIPT_DIR/$file"
+done
+
 # Check Python installation
 echo -e "${BLUE}Checking Python installation...${NC}"
 if ! command_exists python3; then
@@ -71,17 +105,17 @@ source venv/bin/activate
 # Install requirements
 echo -e "${BLUE}Installing Python dependencies...${NC}"
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r "$SCRIPT_DIR/requirements.txt"
 
 # Create .env file if it doesn't exist
-if [ ! -f ".env" ]; then
-    echo -e "${BLUE}Creating .env file...${NC}"
-    cp .env.example .env
+echo -e "${BLUE}Setting up .env file...${NC}"
+if [ ! -f "$SCRIPT_DIR/.env" ]; then
+    cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
     echo -e "${YELLOW}Please edit .env file with your OBT server URL${NC}"
 fi
 
 # Make start script executable
-chmod +x start.sh
+chmod +x "$SCRIPT_DIR/start.sh"
 
 # Create systemd service file
 echo -e "${BLUE}Creating systemd service...${NC}"
@@ -93,9 +127,9 @@ After=network.target ollama.service
 [Service]
 Type=simple
 User=$SUDO_USER
-WorkingDirectory=$(pwd)
-Environment=PATH=$(pwd)/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=$(pwd)/start.sh
+WorkingDirectory=$SCRIPT_DIR
+Environment=PATH=$SCRIPT_DIR/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=$SCRIPT_DIR/start.sh
 Restart=always
 
 [Install]
@@ -109,7 +143,7 @@ echo -e "${GREEN}Installation complete!${NC}"
 echo -e "${YELLOW}You can:${NC}"
 echo -e "${YELLOW}1. Start the service: sudo systemctl start obt-ollama-client${NC}"
 echo -e "${YELLOW}2. Enable service on boot: sudo systemctl enable obt-ollama-client${NC}"
-echo -e "${YELLOW}3. Run manually: ./start.sh${NC}"
+echo -e "${YELLOW}3. Run manually: $SCRIPT_DIR/start.sh${NC}"
 echo -e "${YELLOW}4. Edit .env file to configure the connection to OBT server${NC}"
 
 # Ask to start the service

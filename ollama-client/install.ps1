@@ -70,24 +70,74 @@ if (-not (Test-Path "venv")) {
 Write-ColorOutput "Blue" "Activating virtual environment..."
 . .\venv\Scripts\Activate.ps1
 
-# Install requirements
-Write-ColorOutput "Blue" "Installing Python dependencies..."
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+# Function to download file from GitHub if it doesn't exist
+function Get-GitHubFile {
+    param (
+        [string]$FileName,
+        [string]$TargetPath
+    )
+    
+    if (-not (Test-Path $TargetPath)) {
+        Write-ColorOutput "Blue" "Downloading $FileName from GitHub..."
+        $url = "https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/$FileName"
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $TargetPath
+            if (-not (Test-Path $TargetPath)) {
+                throw "Failed to download $FileName"
+            }
+        }
+        catch {
+            Write-ColorOutput "Red" "Error downloading $FileName from GitHub: $_"
+            exit 1
+        }
+    }
+}
+
+# Get the script directory
+$scriptPath = $MyInvocation.MyCommand.Path
+$scriptDir = Split-Path -Parent $scriptPath
+if (-not $scriptDir) {
+    $scriptDir = $PWD
+}
+
+# Create directory if it doesn't exist
+if (-not (Test-Path $scriptDir)) {
+    New-Item -ItemType Directory -Path $scriptDir | Out-Null
+}
+
+# Ensure we have all required files
+$requiredFiles = @(
+    ".env.example",
+    "requirements.txt",
+    "start.ps1",
+    "main.py"
+)
+
+foreach ($file in $requiredFiles) {
+    Get-GitHubFile -FileName $file -TargetPath (Join-Path $scriptDir $file)
+}
 
 # Create .env file if it doesn't exist
-if (-not (Test-Path ".env")) {
-    Write-ColorOutput "Blue" "Creating .env file..."
-    Copy-Item ".env.example" ".env"
+Write-ColorOutput "Blue" "Setting up .env file..."
+$envExample = Join-Path $scriptDir ".env.example"
+$envTarget = Join-Path $scriptDir ".env"
+if (-not (Test-Path $envTarget)) {
+    Copy-Item $envExample $envTarget
     Write-ColorOutput "Yellow" "Please edit .env file with your OBT server URL"
 }
+
+# Install Python requirements
+Write-ColorOutput "Blue" "Installing Python dependencies..."
+$requirementsPath = Join-Path $scriptDir "requirements.txt"
+pip install -r $requirementsPath
 
 # Create startup shortcut
 $WshShell = New-Object -comObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\OBT Ollama Client.lnk")
 $Shortcut.TargetPath = "powershell.exe"
-$Shortcut.Arguments = "-NoExit -ExecutionPolicy Bypass -File `"$PWD\start.ps1`""
-$Shortcut.WorkingDirectory = $PWD
+$startScript = Join-Path $scriptDir "start.ps1"
+$Shortcut.Arguments = "-NoExit -ExecutionPolicy Bypass -File `"$startScript`""
+$Shortcut.WorkingDirectory = $scriptDir
 $Shortcut.Save()
 
 Write-ColorOutput "Green" "Installation complete!"
