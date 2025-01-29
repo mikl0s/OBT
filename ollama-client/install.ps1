@@ -46,12 +46,9 @@ function Get-GitHubFile {
     }
 }
 
-# Set up installation directory
-$installDir = "C:\Programs\OBT"
-if (-not (Test-Path $installDir)) {
-    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-}
-Set-Location $installDir
+# Use current directory
+$installDir = $PWD.Path
+Write-ColorOutput "Blue" "Installing in current directory: $installDir"
 
 # Download all required files
 $requiredFiles = @(
