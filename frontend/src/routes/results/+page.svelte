@@ -8,7 +8,7 @@
 
   onMount(async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/tests');
+      const response = await fetch('http://localhost:8001/api/v1/tests');
       if (!response.ok) throw new Error('Failed to fetch test sessions');
       sessions = await response.json();
     } catch (e) {

@@ -12,8 +12,8 @@
   onMount(async () => {
     try {
       const [modelsRes, promptsRes] = await Promise.all([
-        fetch('http://localhost:8000/api/v1/models'),
-        fetch('http://localhost:8000/api/v1/tests/prompts')
+        fetch('http://localhost:8001/api/v1/models'),
+        fetch('http://localhost:8001/api/v1/tests/prompts')
       ]);
       
       if (!modelsRes.ok) throw new Error('Failed to fetch models');
@@ -35,7 +35,7 @@
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/tests', {
+      const response = await fetch('http://localhost:8001/api/v1/tests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,6 +1,7 @@
-<script>
-  import '../app.css';
-  import { Navbar, NavBrand, NavLi, NavUl, NavHamburger } from 'flowbite-svelte';
+<script lang="ts">
+	import '../app.css';
+	import { Navbar, NavBrand, NavLi, NavUl, NavHamburger } from 'flowbite-svelte';
+	let { children } = $props();
 </script>
 
 <Navbar let:hidden let:toggle color="dark">
@@ -19,5 +20,5 @@
 </Navbar>
 
 <main class="container mx-auto px-4 py-8">
-  <slot />
+  {@render children()}
 </main>

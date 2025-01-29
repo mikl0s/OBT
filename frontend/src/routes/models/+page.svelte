@@ -8,7 +8,7 @@
 
   onMount(async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/models');
+      const response = await fetch('http://localhost:8001/api/v1/models');
       if (!response.ok) throw new Error('Failed to fetch models');
       models = await response.json();
     } catch (e) {
