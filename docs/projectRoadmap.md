@@ -1,4 +1,4 @@
-# Ollama Hardware & Model Performance Tracker Project Roadmap
+# Ollama Benchmark Tool (OBT) Project Roadmap
 
 ## Project Goals
 - Create a web application for benchmarking Ollama models across different hardware configurations

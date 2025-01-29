@@ -3,7 +3,7 @@
 ## Project Structure
 
 ```
-ollama-benchmark-tracker/
+obt/
 ├── docs/                    # Project documentation
 ├── backend/                 # FastAPI backend
 │   ├── app/
