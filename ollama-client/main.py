@@ -9,7 +9,8 @@ from typing import Dict, List, Optional
 import aiohttp
 import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket
-from pydantic import BaseModel, BaseSettings
+from pydantic import BaseModel
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     """Application settings."""
