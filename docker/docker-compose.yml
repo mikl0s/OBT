@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: obt_mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-admin_password}
+      MONGO_INITDB_DATABASE: obt_db
+      MONGO_USER: ${MONGO_USER:-obt_user}
+      MONGO_PASSWORD: ${MONGO_PASSWORD:-obt_password}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+      - ./mongodb/mongod.conf:/etc/mongod.conf
+      - ./mongodb/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+      - mongodb_logs:/var/log/mongodb
+    command: ["mongod", "--config", "/etc/mongod.conf"]
+    networks:
+      - obt_network
+
+networks:
+  obt_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  mongodb_config:
+  mongodb_logs:
