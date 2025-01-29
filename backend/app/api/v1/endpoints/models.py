@@ -19,4 +19,4 @@ async def list_models() -> List[OllamaModel]:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve model list: {str(e)}",
-        )
+        ) from e

@@ -19,7 +19,7 @@ async def create_test_session(model_names: List[str]) -> TestSession:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to start test session: {str(e)}",
-        )
+        ) from e
 
 
 @router.websocket("/ws/{session_id}")

@@ -1,6 +1,5 @@
 """Hardware information endpoints."""
 
-from typing import List
 
 from fastapi import APIRouter, HTTPException
 
@@ -19,4 +18,4 @@ async def get_hardware_info() -> HardwareConfig:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve hardware information: {str(e)}",
-        )
+        ) from e

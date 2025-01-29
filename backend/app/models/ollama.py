@@ -70,7 +70,9 @@ class TestResult(MongoModel):
 class TestSession(MongoModel):
     """Complete test session."""
 
-    hardware_config_id: str = Field(..., description="Reference to hardware configuration")
+    hardware_config_id: str = Field(
+        ..., description="Reference to hardware configuration"
+    )
     status: TestStatus = Field(..., description="Overall session status")
     start_time: datetime = Field(..., description="Session start time")
     end_time: Optional[datetime] = Field(None, description="Session end time")

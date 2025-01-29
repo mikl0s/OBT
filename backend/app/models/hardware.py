@@ -1,6 +1,6 @@
 """Hardware information models."""
 
-from typing import List, Optional
+from typing import List
 
 from pydantic import Field
 
@@ -65,4 +65,6 @@ class HardwareConfig(MongoModel):
     storage: Storage = Field(..., description="Storage information")
     os: OS = Field(..., description="OS information")
     bios: BIOS = Field(..., description="BIOS information")
-    tags: List[str] = Field(default_factory=list, description="Hardware configuration tags")
+    tags: List[str] = Field(
+        default_factory=list, description="Hardware configuration tags"
+    )

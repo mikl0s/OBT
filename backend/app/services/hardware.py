@@ -7,15 +7,7 @@ import cpuinfo
 import psutil
 from GPUtil import GPUtil
 
-from app.models.hardware import (
-    BIOS,
-    CPU,
-    GPU,
-    OS,
-    RAM,
-    Storage,
-    HardwareConfig,
-)
+from app.models.hardware import BIOS, CPU, GPU, OS, RAM, HardwareConfig, Storage
 
 
 async def get_system_info() -> HardwareConfig:
@@ -80,7 +72,7 @@ async def _get_storage_info() -> Storage:
                 type=partition.fstype,
                 size=usage.total // (1024 * 1024 * 1024),  # Convert to GB
             )
-    
+
     # Fallback to first partition if root not found
     if partitions:
         usage = psutil.disk_usage(partitions[0].mountpoint)
@@ -88,7 +80,7 @@ async def _get_storage_info() -> Storage:
             type=partitions[0].fstype,
             size=usage.total // (1024 * 1024 * 1024),
         )
-    
+
     raise RuntimeError("No storage partitions found")
 
 
