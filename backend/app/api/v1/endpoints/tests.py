@@ -1,20 +1,42 @@
 """Test execution and management endpoints."""
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, WebSocket
+from pydantic import BaseModel
 
 from app.models.ollama import TestSession
+from app.services.prompts import get_available_prompts, get_prompt_content
 from app.services.test_runner import start_test_session
 
 router = APIRouter()
 
 
+class TestRequest(BaseModel):
+    """Test session request."""
+
+    model_names: List[str]
+    prompt_ids: Optional[List[str]] = None
+
+
+@router.get("/prompts", response_model=List[dict])
+async def list_prompts() -> List[dict]:
+    """List all available test prompts."""
+    return await get_available_prompts()
+
+
 @router.post("/", response_model=TestSession)
-async def create_test_session(model_names: List[str]) -> TestSession:
+async def create_test_session(request: TestRequest) -> TestSession:
     """Create and start a new test session."""
     try:
-        return await start_test_session(model_names)
+        # If no prompts specified, use all available prompts
+        if not request.prompt_ids:
+            prompts = await get_available_prompts()
+            request.prompt_ids = [p["id"] for p in prompts]
+
+        # Get prompt contents
+        prompt_contents = await get_prompt_content(request.prompt_ids)
+        return await start_test_session(request.model_names, prompt_contents)
     except Exception as e:
         raise HTTPException(
             status_code=500,

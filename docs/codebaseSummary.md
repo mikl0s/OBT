@@ -5,6 +5,10 @@
 ```
 obt/
 ├── docs/                    # Project documentation
+├── prompts/                 # Test prompts in markdown format
+│   ├── writing500words.md  # Writing task prompt
+│   ├── codingSudoko.md     # Coding task prompt
+│   └── codingLandingpage.md # Web development prompt
 ├── backend/                 # FastAPI backend
 │   ├── app/
 │   │   ├── api/            # API endpoints
@@ -31,16 +35,21 @@ obt/
    - REST endpoints for model management
    - Test execution endpoints
    - Results retrieval endpoints
+   - `/api/v1/tests/prompts`: List available test prompts
 
 2. **Core Services** (`backend/app/core/`)
    - Ollama integration
    - Hardware information collection
    - Test execution engine
+   - Prompt management service
 
 3. **Data Models** (`backend/app/models/`)
    - MongoDB schemas
    - Data validation models
    - Type definitions
+   - `hardware.py`: System hardware configuration models
+   - `ollama.py`: Ollama models and test result schemas
+   - `base.py`: Base MongoDB model
 
 ### Frontend Components
 1. **Pages** (`frontend/src/routes/`)
@@ -63,6 +72,7 @@ obt/
 - `/api/v1/hardware`: Hardware information collection
 - `/api/v1/models`: Ollama model management
 - `/api/v1/tests`: Test execution and monitoring
+- `/api/v1/tests/prompts`: List available test prompts
 
 #### Data Models
 - `hardware.py`: System hardware configuration models
@@ -73,25 +83,32 @@ obt/
 - `hardware.py`: Hardware information collection service
 - `ollama.py`: Ollama API interaction service
 - `test_runner.py`: Test execution service
+- `prompts.py`: Prompt management service
+
+### Test Prompts
+The application uses markdown files in the `prompts/` directory for test scenarios:
+1. `writing500words.md`: Tests model's ability to generate longer text
+2. `codingSudoko.md`: Tests model's coding capabilities
+3. `codingLandingpage.md`: Tests web development skills
+
+Users can add or remove prompts by modifying markdown files in this directory. The system will automatically detect and use all `.md` files as test prompts.
 
 ### Data Flow
-1. User selects models for testing
-2. Backend discovers local Ollama installation
-3. Test execution engine runs benchmarks
-4. Results stored in MongoDB
-5. Frontend retrieves and displays results
-
-### Detailed Data Flow
 1. Hardware information is collected using system libraries (psutil, py-cpuinfo, GPUtil)
 2. Ollama models are discovered through the Ollama API
-3. Test sessions are created and run asynchronously
-4. Test results, including reasoning and responses, are stored in MongoDB
-5. Real-time updates are sent via WebSocket
+3. Test prompts are loaded from the `prompts/` directory
+4. Test sessions are created and run asynchronously
+5. Test results, including reasoning and responses, are stored in MongoDB
+6. Real-time updates are sent via WebSocket
 
-## Recent Changes
+### Recent Changes
 - Initial project setup
 - Documentation structure created
 - Technology stack defined
+- Added dynamic prompt loading from `prompts/` directory
+   - Support for custom test prompts
+   - Automatic prompt discovery
+   - Optional prompt selection for tests
 - Added Ollama response parsing with reasoning extraction
    - Captures content between `<think>` tags as reasoning
    - Separates reasoning from actual response
@@ -102,7 +119,7 @@ obt/
    - Added reasoning field to response model
    - Enhanced test result structure
 
-## External Dependencies
+### External Dependencies
 - MongoDB for data storage
 - Local Ollama installation
 - System hardware access

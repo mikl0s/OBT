@@ -9,7 +9,9 @@ from app.services.hardware import get_system_info
 from app.services.ollama import generate_completion
 
 
-async def start_test_session(model_names: List[str]) -> TestSession:
+async def start_test_session(
+    model_names: List[str], prompts: Dict[str, str]
+) -> TestSession:
     """Start a new test session."""
     hardware_info = await get_system_info()
     hardware_id = str(hardware_info.id)
@@ -23,15 +25,17 @@ async def start_test_session(model_names: List[str]) -> TestSession:
     )
 
     # Start test execution in background
-    asyncio.create_task(run_test_session(session, model_names))
+    asyncio.create_task(run_test_session(session, model_names, prompts))
     return session
 
 
-async def run_test_session(session: TestSession, model_names: List[str]) -> None:
+async def run_test_session(
+    session: TestSession, model_names: List[str], prompts: Dict[str, str]
+) -> None:
     """Run tests for all models in the session."""
     try:
         for model_name in model_names:
-            model_results = await run_model_tests(model_name)
+            model_results = await run_model_tests(model_name, prompts)
             session.models.append({model_name: model_results})
 
         session.status = TestStatus.COMPLETED
@@ -42,28 +46,22 @@ async def run_test_session(session: TestSession, model_names: List[str]) -> None
         # Log error and update session status in database
 
 
-async def run_model_tests(model_name: str) -> List[TestResult]:
+async def run_model_tests(model_name: str, prompts: Dict[str, str]) -> List[TestResult]:
     """Run all test types for a specific model."""
     results: List[TestResult] = []
 
-    # Test prompts for different scenarios
-    prompts = {
-        TestType.COMPLETION: "Explain how a bicycle works.",
-        TestType.CHAT: "What is your thought process when answering questions?",
-    }
-
-    for test_type, prompt in prompts.items():
+    for prompt_id, prompt_content in prompts.items():
         result = TestResult(
-            test_type=test_type,
+            test_type=TestType.COMPLETION,  # Default to completion for now
             status=TestStatus.RUNNING,
             start_time=datetime.utcnow(),
-            prompt=prompt,
+            prompt=prompt_content,
             responses=[],
         )
 
         try:
             # Generate completion and collect responses
-            responses = await generate_completion(model_name, prompt)
+            responses = await generate_completion(model_name, prompt_content)
             result.responses.extend(responses)
             result.status = TestStatus.COMPLETED
         except Exception as e:

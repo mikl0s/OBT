@@ -8,11 +8,18 @@
 - Implemented hardware information collection service
 - Set up API endpoints structure
 - Added WebSocket support for test progress updates
+- Added Ollama integration with reasoning extraction
+- Implemented dynamic prompt loading from prompts directory
+- Created default test prompts:
+  - writing500words.md
+  - codingSudoko.md
+  - codingLandingpage.md
 
 ## Current Objectives
 - Set up frontend framework with SvelteKit
 - Create initial UI components
 - Implement model selection interface
+- Add prompt selection functionality
 
 ## Next Steps
 1. Frontend Development
@@ -20,11 +27,12 @@
    - Set up Tailwind CSS and Flowbite-Svelte
    - Create base UI components
    - Implement model selection page
+   - Add prompt selection interface
 
 2. Backend Integration
-   - Complete Ollama integration service
-   - Implement test execution engine
+   - Complete test execution engine
    - Add real-time progress updates via WebSocket
+   - Implement result storage in MongoDB
 
 3. Testing
    - Write unit tests for backend services
@@ -36,11 +44,14 @@
 - MongoDB is configured with Podman
 - Hardware information collection is implemented
 - API endpoints structure is ready for frontend integration
+- Test prompts are managed through markdown files
+- Ollama integration supports reasoning extraction
 
 ## Notes
 - Focus on creating a clean, modern UI with dark theme
 - Ensure real-time updates work smoothly
 - Keep documentation updated as we progress
+- Allow users to easily add/remove test prompts
 
 ## References
 - See `projectRoadmap.md` for overall project goals and progress
