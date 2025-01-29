@@ -25,87 +25,35 @@ function Write-ColorOutput($ForegroundColor) {
     $host.UI.RawUI.ForegroundColor = $fc
 }
 
-# Check Python installation
-Write-ColorOutput "Blue" "Checking Python installation..."
-if (-not (Test-Command python)) {
-    Write-ColorOutput "Red" "Python is not installed. Please install Python 3.8 or later from https://www.python.org/"
-    exit 1
-}
-
-# Check Python version
-$pythonVersion = (python --version 2>&1).ToString().Split(" ")[1]
-$versionParts = $pythonVersion.Split(".")
-if ([int]$versionParts[0] -lt 3 -or ([int]$versionParts[0] -eq 3 -and [int]$versionParts[1] -lt 8)) {
-    Write-ColorOutput "Red" "Python version must be 3.8 or later. Current version: $pythonVersion"
-    exit 1
-}
-
-# Check if Ollama is installed
-Write-ColorOutput "Blue" "Checking Ollama installation..."
-if (-not (Test-Command ollama)) {
-    Write-ColorOutput "Yellow" "Ollama is not installed. Installing Ollama..."
-    
-    # Download Ollama installer
-    $installerUrl = "https://ollama.ai/download/ollama-windows.exe"
-    $installerPath = "$env:TEMP\ollama-installer.exe"
-    
-    try {
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-        Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
-        Remove-Item $installerPath
-    }
-    catch {
-        Write-ColorOutput "Red" "Failed to install Ollama: $_"
-        exit 1
-    }
-}
-
-# Create virtual environment
-Write-ColorOutput "Blue" "Setting up Python virtual environment..."
-if (-not (Test-Path "venv")) {
-    python -m venv venv
-}
-
-# Activate virtual environment
-Write-ColorOutput "Blue" "Activating virtual environment..."
-. .\venv\Scripts\Activate.ps1
-
-# Function to download file from GitHub if it doesn't exist
+# Function to download file from GitHub
 function Get-GitHubFile {
     param (
         [string]$FileName,
         [string]$TargetPath
     )
     
-    if (-not (Test-Path $TargetPath)) {
-        Write-ColorOutput "Blue" "Downloading $FileName from GitHub..."
-        $url = "https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/$FileName"
-        try {
-            Invoke-WebRequest -Uri $url -OutFile $TargetPath
-            if (-not (Test-Path $TargetPath)) {
-                throw "Failed to download $FileName"
-            }
+    Write-ColorOutput "Blue" "Downloading $FileName from GitHub..."
+    $url = "https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/$FileName"
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $TargetPath
+        if (-not (Test-Path $TargetPath)) {
+            throw "Failed to download $FileName"
         }
-        catch {
-            Write-ColorOutput "Red" "Error downloading $FileName from GitHub: $_"
-            exit 1
-        }
+    }
+    catch {
+        Write-ColorOutput "Red" "Error downloading $FileName from GitHub: $_"
+        exit 1
     }
 }
 
-# Get the script directory
-$scriptPath = $MyInvocation.MyCommand.Path
-$scriptDir = Split-Path -Parent $scriptPath
-if (-not $scriptDir) {
-    $scriptDir = $PWD
+# Set up installation directory
+$installDir = "C:\Programs\OBT"
+if (-not (Test-Path $installDir)) {
+    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 }
+Set-Location $installDir
 
-# Create directory if it doesn't exist
-if (-not (Test-Path $scriptDir)) {
-    New-Item -ItemType Directory -Path $scriptDir | Out-Null
-}
-
-# Ensure we have all required files
+# Download all required files
 $requiredFiles = @(
     ".env.example",
     "requirements.txt",
@@ -114,30 +62,65 @@ $requiredFiles = @(
 )
 
 foreach ($file in $requiredFiles) {
-    Get-GitHubFile -FileName $file -TargetPath (Join-Path $scriptDir $file)
+    Get-GitHubFile -FileName $file -TargetPath (Join-Path $installDir $file)
 }
+
+# Check Python installation
+Write-ColorOutput "Blue" "Checking Python installation..."
+if (-not (Test-Command "python")) {
+    Write-ColorOutput "Yellow" "Python is not installed. Installing Python..."
+    if (-not (Test-Command "choco")) {
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+    }
+    choco install python -y
+    refreshenv
+}
+
+# Check Ollama installation
+Write-ColorOutput "Blue" "Checking Ollama installation..."
+if (-not (Test-Command "ollama")) {
+    Write-ColorOutput "Yellow" "Ollama is not installed. Installing Ollama..."
+    $ollamaInstaller = Join-Path $env:TEMP "ollama-installer.exe"
+    Invoke-WebRequest -Uri "https://ollama.ai/download/ollama-windows-amd64.exe" -OutFile $ollamaInstaller
+    Start-Process -FilePath $ollamaInstaller -ArgumentList "/S" -Wait
+    refreshenv
+}
+
+# Set up Python virtual environment
+Write-ColorOutput "Blue" "Setting up Python virtual environment..."
+python -m venv venv
+if (-not (Test-Path "venv")) {
+    Write-ColorOutput "Red" "Failed to create virtual environment"
+    exit 1
+}
+
+# Activate virtual environment
+Write-ColorOutput "Blue" "Activating virtual environment..."
+. .\venv\Scripts\Activate.ps1
+
+# Install Python dependencies
+Write-ColorOutput "Blue" "Installing Python dependencies..."
+python -m pip install --upgrade pip
+pip install -r (Join-Path $installDir "requirements.txt")
 
 # Create .env file if it doesn't exist
 Write-ColorOutput "Blue" "Setting up .env file..."
-$envExample = Join-Path $scriptDir ".env.example"
-$envTarget = Join-Path $scriptDir ".env"
+$envExample = Join-Path $installDir ".env.example"
+$envTarget = Join-Path $installDir ".env"
 if (-not (Test-Path $envTarget)) {
     Copy-Item $envExample $envTarget
     Write-ColorOutput "Yellow" "Please edit .env file with your OBT server URL"
 }
 
-# Install Python requirements
-Write-ColorOutput "Blue" "Installing Python dependencies..."
-$requirementsPath = Join-Path $scriptDir "requirements.txt"
-pip install -r $requirementsPath
-
 # Create startup shortcut
 $WshShell = New-Object -comObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\OBT Ollama Client.lnk")
 $Shortcut.TargetPath = "powershell.exe"
-$startScript = Join-Path $scriptDir "start.ps1"
+$startScript = Join-Path $installDir "start.ps1"
 $Shortcut.Arguments = "-NoExit -ExecutionPolicy Bypass -File `"$startScript`""
-$Shortcut.WorkingDirectory = $scriptDir
+$Shortcut.WorkingDirectory = "$installDir"
 $Shortcut.Save()
 
 Write-ColorOutput "Green" "Installation complete!"
