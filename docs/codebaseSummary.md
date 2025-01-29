@@ -20,7 +20,7 @@ obt/
 │   │   └── stores/        # State management
 │   ├── static/            # Static assets
 │   └── tests/             # Frontend tests
-└── docker/                # Container configurations
+└── pods/                  # Container configurations
     └── mongodb/           # MongoDB container setup
 ```
 

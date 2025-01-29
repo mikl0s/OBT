@@ -54,8 +54,8 @@
 # Install Ollama
 curl https://ollama.ai/install.sh | sh
 
-# Install Podman
-sudo apt-get install -y podman
+# Install Podman and podman-compose
+sudo apt-get install -y podman podman-compose
 
 # Clone the repository
 git clone https://github.com/mikl0s/OBT.git

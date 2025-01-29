@@ -10,10 +10,11 @@
    ```bash
    # Ubuntu/Debian
    sudo apt-get update
-   sudo apt-get install -y podman
+   sudo apt-get install -y podman podman-compose
    
    # Verify installation
    podman --version
+   podman-compose --version
    ```
 
 3. **Node.js and pnpm**
@@ -142,7 +143,7 @@
 
 3. **Deploy containers**
    ```bash
-   cd docker
+   cd pods
    podman-compose up -d
    ```
 
