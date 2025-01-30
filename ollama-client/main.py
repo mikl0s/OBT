@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import signal
 from datetime import datetime
 from typing import Dict, List, Optional
 import dateutil.parser
@@ -21,6 +22,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 logger.info(f"Starting Ollama Client v{__version__}")
+
+# Global flag for graceful shutdown
+shutdown_event = asyncio.Event()
+
+def handle_shutdown(signum, frame):
+    """Handle shutdown signals gracefully."""
+    logger.info("Shutdown signal received, cleaning up...")
+    shutdown_event.set()
+
+# Register signal handlers
+signal.signal(signal.SIGINT, handle_shutdown)
+signal.signal(signal.SIGTERM, handle_shutdown)
 
 class Settings(BaseSettings):
     """Application settings."""
@@ -108,17 +121,16 @@ async def send_heartbeat() -> bool:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{settings.OBT_SERVER_URL}/api/v1/models/heartbeat",
+                params={"client_id": settings.CLIENT_ID},
                 json={
-                    "client_id": settings.CLIENT_ID,
                     "version": __version__,
-                    "ollama_available": ollama_available,
+                    "available": ollama_available,
                     "models": [model.dict() for model in models]
                 }
             ) as response:
                 if response.status != 200:
-                    logger.error(f"Failed heartbeat: {await response.text()}")
+                    logger.error(f"Failed to send heartbeat: {await response.text()}")
                     return False
-                logger.debug("Heartbeat successful")
                 return True
     except Exception as e:
         logger.error(f"Failed to send heartbeat: {e}")
@@ -126,24 +138,39 @@ async def send_heartbeat() -> bool:
 
 async def heartbeat_loop():
     """Main heartbeat loop."""
-    while True:
-        try:
-            if not await register_with_server():
-                logger.error("Failed to register, retrying in 10 seconds...")
-            else:
-                while True:
-                    if not await send_heartbeat():
-                        logger.error("Heartbeat failed, will retry registration")
-                        break
-                    await asyncio.sleep(settings.HEARTBEAT_INTERVAL)
-        except Exception as e:
-            logger.error(f"Error in heartbeat loop: {e}")
-        await asyncio.sleep(settings.HEARTBEAT_INTERVAL)
+    logger.info(f"Connecting to OBT server at {settings.OBT_SERVER_URL}")
+    
+    while not shutdown_event.is_set():
+        if not await register_with_server():
+            logger.error("Failed to register, retrying in 10 seconds...")
+            try:
+                await asyncio.wait_for(shutdown_event.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                continue
+            continue
+
+        while not shutdown_event.is_set():
+            if not await send_heartbeat():
+                break
+            try:
+                await asyncio.wait_for(shutdown_event.wait(), timeout=settings.HEARTBEAT_INTERVAL)
+            except asyncio.TimeoutError:
+                continue
+    
+    logger.info("Heartbeat loop stopped")
 
 async def main():
     """Main entry point."""
-    logger.info(f"Connecting to OBT server at {settings.OBT_SERVER_URL}")
-    await heartbeat_loop()
+    try:
+        await heartbeat_loop()
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+    finally:
+        logger.info("Shutting down client...")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass  # Already handled by signal handler
+    logger.info("Client stopped")
