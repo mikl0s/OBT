@@ -9,8 +9,6 @@ from typing import Dict, List, Optional
 import dateutil.parser
 
 import aiohttp
-import uvicorn
-from fastapi import FastAPI, HTTPException, WebSocket
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
@@ -26,15 +24,15 @@ logger.info(f"Starting Ollama Client v{__version__}")
 
 class Settings(BaseSettings):
     """Application settings."""
-    OBT_SERVER_URL: str = "http://localhost:8001/api/v1"
+    OBT_SERVER_URL: str = "http://localhost:8881"
     OLLAMA_URL: str = "http://localhost:11434"
-    CLIENT_PORT: int = 8002
+    CLIENT_ID: str = "default-client"
+    HEARTBEAT_INTERVAL: int = 10  # seconds
     
     class Config:
         env_file = ".env"
 
 settings = Settings()
-app = FastAPI(title="OBT Ollama Client", version=__version__)
 
 class OllamaModel(BaseModel):
     """Ollama model information."""
@@ -49,173 +47,99 @@ class OllamaModel(BaseModel):
             float: lambda v: v
         }
 
-class ModelResponse(BaseModel):
-    """Response from model endpoint."""
-    response: str
-    done: bool
-    reasoning: Optional[str] = None
-
-class VersionResponse(BaseModel):
-    """Response from version endpoint."""
-    version: str
-
-class HealthResponse(BaseModel):
-    """Response from health check endpoint."""
-    status: str
-    version: str
-    ollama_connected: bool
-
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Check health status of the client."""
+async def check_ollama_connection() -> bool:
+    """Check if Ollama is available."""
     try:
-        # Check Ollama connection
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{settings.OLLAMA_URL}/api/tags") as response:
-                ollama_connected = response.status == 200
-    except Exception:
-        ollama_connected = False
+                return response.status == 200
+    except Exception as e:
+        logger.error(f"Failed to connect to Ollama: {e}")
+        return False
 
-    return HealthResponse(
-        status="healthy",
-        version=__version__,
-        ollama_connected=ollama_connected
-    )
+async def get_installed_models() -> List[OllamaModel]:
+    """Get list of installed models from Ollama."""
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"{settings.OLLAMA_URL}/api/tags") as response:
+            if response.status != 200:
+                raise Exception(f"Failed to get models: {await response.text()}")
+            data = await response.json()
+            models = []
+            for model in data.get("models", []):
+                models.append(OllamaModel(
+                    name=model["name"],
+                    tags=model.get("tags", []),
+                    size=model.get("size", 0),
+                    modified=model.get("modified", 0),
+                    version=model.get("version", "unknown")
+                ))
+            return models
 
-@app.get("/version", response_model=VersionResponse)
-async def get_version():
-    """Get client version."""
-    return VersionResponse(version=__version__)
-
-async def forward_to_obt(endpoint: str, data: Dict) -> Dict:
-    """Forward data to OBT server."""
-    logger.debug(f"Forwarding to OBT endpoint {endpoint}")
-    logger.debug(f"Data being sent: {json.dumps(data, default=str)}")
-    
+async def register_with_server() -> bool:
+    """Register this client with the OBT server."""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{settings.OBT_SERVER_URL}/{endpoint}",
-                json=data
+                f"{settings.OBT_SERVER_URL}/api/v1/models/register",
+                json={
+                    "client_id": settings.CLIENT_ID,
+                    "version": __version__,
+                }
             ) as response:
                 if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Error from OBT server: {error_text}")
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"Error from OBT server: {error_text}"
-                    )
-                response_data = await response.json()
-                logger.debug(f"Response from OBT: {json.dumps(response_data, default=str)}")
-                return response_data
+                    logger.error(f"Failed to register: {await response.text()}")
+                    return False
+                logger.info("Successfully registered with OBT server")
+                return True
     except Exception as e:
-        logger.error(f"Error forwarding to OBT: {str(e)}")
-        raise
+        logger.error(f"Failed to register with server: {e}")
+        return False
 
-@app.get("/models", response_model=List[OllamaModel])
-async def list_models():
-    """List all installed Ollama models."""
+async def send_heartbeat() -> bool:
+    """Send heartbeat to server with current status."""
     try:
-        logger.info("Fetching models from Ollama")
+        ollama_available = await check_ollama_connection()
+        models = await get_installed_models() if ollama_available else []
+        
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{settings.OLLAMA_URL}/api/tags") as response:
+            async with session.post(
+                f"{settings.OBT_SERVER_URL}/api/v1/models/heartbeat",
+                json={
+                    "client_id": settings.CLIENT_ID,
+                    "version": __version__,
+                    "ollama_available": ollama_available,
+                    "models": [model.dict() for model in models]
+                }
+            ) as response:
                 if response.status != 200:
-                    error_msg = f"Failed to fetch models from Ollama: {await response.text()}"
-                    logger.error(error_msg)
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=error_msg
-                    )
-                data = await response.json()
-                logger.debug(f"Raw Ollama response: {json.dumps(data, default=str)}")
-                
-                models = []
-                for model in data.get("models", []):
-                    try:
-                        # Parse the ISO timestamp to get Unix timestamp
-                        modified_at = dateutil.parser.parse(model.get("modified_at", "1970-01-01T00:00:00Z"))
-                        modified_timestamp = modified_at.timestamp()
-                        
-                        model_obj = OllamaModel(
-                            name=model["name"],
-                            tags=model.get("tags", []),
-                            version=model.get("version", "unknown"),
-                            size=model.get("size", 0),
-                            modified=modified_timestamp
-                        )
-                        models.append(model_obj)
-                    except Exception as e:
-                        logger.error(f"Error creating model object: {str(e)}, model data: {json.dumps(model, default=str)}")
-                        continue
-                
-                logger.debug(f"Created model objects: {[m.dict() for m in models]}")
-                
-                # Forward to OBT server
-                try:
-                    model_data = {
-                        "models": [m.dict() for m in models]  # Use dict() instead of manual conversion
-                    }
-                    logger.debug(f"Forwarding model data: {json.dumps(model_data, default=str)}")
-                    await forward_to_obt("models/sync", model_data)
-                except Exception as e:
-                    logger.error(f"Error forwarding to OBT: {str(e)}")
-                    # Continue even if forwarding fails
-                
-                return models
+                    logger.error(f"Failed heartbeat: {await response.text()}")
+                    return False
+                logger.debug("Heartbeat successful")
+                return True
     except Exception as e:
-        error_msg = f"Failed to list models: {str(e)}"
-        logger.error(error_msg)
-        raise HTTPException(
-            status_code=500,
-            detail=error_msg
-        )
+        logger.error(f"Failed to send heartbeat: {e}")
+        return False
 
-@app.websocket("/ws/generate/{model_name}")
-async def generate(websocket: WebSocket, model_name: str):
-    """Generate completions and stream results back to OBT."""
-    logger.info(f"Established WebSocket connection for model {model_name}")
-    await websocket.accept()
-    
-    try:
-        while True:
-            # Receive prompt from OBT
-            data = await websocket.receive_json()
-            prompt = data.get("prompt")
-            if not prompt:
-                continue
-                
-            logger.debug(f"Received prompt: {prompt}")
-            
-            # Stream to Ollama
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{settings.OLLAMA_URL}/api/generate",
-                    json={"model": model_name, "prompt": prompt}
-                ) as response:
-                    async for line in response.content:
-                        if not line:
-                            continue
-                        try:
-                            result = json.loads(line)
-                            logger.debug(f"Received result from Ollama: {json.dumps(result, default=str)}")
-                            # Forward to OBT
-                            await websocket.send_json({
-                                "response": result.get("response", ""),
-                                "done": result.get("done", False)
-                            })
-                        except json.JSONDecodeError:
-                            logger.error("Error parsing result from Ollama")
-                            continue
-                            
-    except Exception as e:
-        logger.error(f"Error generating completions: {str(e)}")
-        await websocket.close(code=1001, reason=str(e))
+async def heartbeat_loop():
+    """Main heartbeat loop."""
+    while True:
+        try:
+            if not await register_with_server():
+                logger.error("Failed to register, retrying in 10 seconds...")
+            else:
+                while True:
+                    if not await send_heartbeat():
+                        logger.error("Heartbeat failed, will retry registration")
+                        break
+                    await asyncio.sleep(settings.HEARTBEAT_INTERVAL)
+        except Exception as e:
+            logger.error(f"Error in heartbeat loop: {e}")
+        await asyncio.sleep(settings.HEARTBEAT_INTERVAL)
+
+async def main():
+    """Main entry point."""
+    logger.info(f"Connecting to OBT server at {settings.OBT_SERVER_URL}")
+    await heartbeat_loop()
 
 if __name__ == "__main__":
-    logger.info("Starting Ollama client")
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=settings.CLIENT_PORT,
-        reload=True
-    )
+    asyncio.run(main())

@@ -10,43 +10,52 @@ from fastapi import HTTPException, WebSocket
 from app.core.config import settings
 from app.models.ollama import OllamaModel, OllamaResponse, TestType
 
-# Store connected clients
-ollama_clients: Dict[str, str] = {}
+# Store connected clients with their last heartbeat time and status
+ollama_clients: Dict[str, Dict] = {}
 
-async def check_client_health(client_url: str) -> bool:
-    """Check if client is healthy and connected to Ollama."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{client_url}/health") as response:
-                if response.status != 200:
-                    return False
-                data = await response.json()
-                return data.get("status") == "healthy" and data.get("ollama_connected", False)
-    except Exception:
-        return False
-
-async def register_client(client_url: str, client_id: str):
+async def register_client(client_id: str, version: str):
     """Register an Ollama client."""
-    # Check client health before registering
-    if not await check_client_health(client_url):
-        raise HTTPException(
-            status_code=400,
-            detail="Client is not healthy or not connected to Ollama"
-        )
-    ollama_clients[client_id] = client_url
+    ollama_clients[client_id] = {
+        "version": version,
+        "last_heartbeat": datetime.now(),
+        "models": [],
+        "available": False
+    }
 
-async def get_client(client_id: str) -> Optional[str]:
-    """Get client URL by ID."""
-    client_url = ollama_clients.get(client_id)
-    if not client_url:
-        return None
+async def handle_heartbeat(client_id: str, version: str, ollama_available: bool, models: List[Dict]) -> bool:
+    """Handle heartbeat from client."""
+    if client_id not in ollama_clients:
+        await register_client(client_id, version)
+    
+    client = ollama_clients[client_id]
+    client["last_heartbeat"] = datetime.now()
+    client["available"] = ollama_available
+    client["version"] = version
+    
+    if ollama_available and models:
+        client["models"] = await sync_models(client_id, models)
+    else:
+        client["models"] = []
+    
+    return True
+
+def is_client_healthy(client_id: str) -> bool:
+    """Check if client is healthy based on last heartbeat."""
+    if client_id not in ollama_clients:
+        return False
         
-    # Check if client is still healthy
-    if not await check_client_health(client_url):
-        del ollama_clients[client_id]
+    client = ollama_clients[client_id]
+    last_heartbeat = client["last_heartbeat"]
+    time_since_heartbeat = (datetime.now() - last_heartbeat).total_seconds()
+    
+    # Client is considered unhealthy if no heartbeat in 30 seconds
+    return time_since_heartbeat < 30 and client["available"]
+
+async def get_client(client_id: str) -> Optional[Dict]:
+    """Get client info by ID."""
+    if not is_client_healthy(client_id):
         return None
-        
-    return client_url
+    return ollama_clients.get(client_id)
 
 async def sync_models(client_id: str, models: List[Dict]) -> List[OllamaModel]:
     """Sync models from a client."""
@@ -63,30 +72,13 @@ async def sync_models(client_id: str, models: List[Dict]) -> List[OllamaModel]:
 
 async def get_installed_models(client_id: str) -> List[OllamaModel]:
     """Get list of installed Ollama models from a specific client."""
-    client_url = await get_client(client_id)
-    if not client_url:
+    client = await get_client(client_id)
+    if not client:
         raise HTTPException(
             status_code=404,
             detail=f"Ollama client {client_id} not found or not healthy"
         )
-        
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{client_url}/models") as response:
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"Failed to fetch models from client: {await response.text()}"
-                    )
-                    
-                data = await response.json()
-                return await sync_models(client_id, data)
-                
-    except aiohttp.ClientError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to connect to Ollama client: {str(e)}"
-        )
+    return client["models"]
 
 async def generate_completion(
     client_id: str,
@@ -96,8 +88,8 @@ async def generate_completion(
     stream: bool = True
 ) -> OllamaResponse:
     """Generate a completion from Ollama via client."""
-    client_url = await get_client(client_id)
-    if not client_url:
+    client = await get_client(client_id)
+    if not client:
         raise HTTPException(
             status_code=404,
             detail=f"Ollama client {client_id} not found or not healthy"
@@ -106,7 +98,7 @@ async def generate_completion(
     try:
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(
-                f"{client_url}/ws/generate/{model}"
+                f"{client['url']}/ws/generate/{model}"
             ) as ws:
                 await ws.send_json({"prompt": prompt})
                 
