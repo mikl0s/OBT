@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import logging
 
 import aiohttp
@@ -13,6 +13,9 @@ from app.models.ollama import OllamaModel, OllamaResponse, TestType
 
 # Store connected clients with their last heartbeat time and status
 ollama_clients: Dict[str, Dict] = {}
+
+# Client is considered unhealthy if no heartbeat in 60 seconds
+CLIENT_TIMEOUT_SECONDS = 60
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +54,7 @@ def is_client_healthy(client_id: str) -> bool:
     last_heartbeat = client["last_heartbeat"]
     time_since_heartbeat = (datetime.now() - last_heartbeat).total_seconds()
     
-    # Client is considered unhealthy if no heartbeat in 30 seconds
-    return time_since_heartbeat < 30 and client["available"]
+    return time_since_heartbeat < CLIENT_TIMEOUT_SECONDS and client["available"]
 
 async def get_client(client_id: str) -> Optional[Dict]:
     """Get client info by ID."""
@@ -159,3 +161,34 @@ async def generate_completion(
             status_code=500,
             detail=f"Failed to generate completion: {str(e)}"
         )
+
+def get_healthy_clients() -> List[Dict[str, Any]]:
+    """Get all healthy clients with their status."""
+    healthy_clients = []
+    for client_id, client in ollama_clients.items():
+        if is_client_healthy(client_id):
+            client_info = {
+                "id": client_id,
+                "version": client["version"],
+                "available": client["available"],
+                "model_count": len(client["models"]),
+                "last_heartbeat": client["last_heartbeat"].isoformat()
+            }
+            healthy_clients.append(client_info)
+    return healthy_clients
+
+def cleanup_inactive_clients():
+    """Remove clients that haven't sent a heartbeat in CLIENT_TIMEOUT_SECONDS."""
+    current_time = datetime.now()
+    to_remove = []
+    
+    for client_id, client in ollama_clients.items():
+        time_since_heartbeat = (current_time - client["last_heartbeat"]).total_seconds()
+        if time_since_heartbeat >= CLIENT_TIMEOUT_SECONDS:
+            to_remove.append(client_id)
+            
+    for client_id in to_remove:
+        logger.info(f"Removing inactive client: {client_id}")
+        del ollama_clients[client_id]
+        
+    return to_remove

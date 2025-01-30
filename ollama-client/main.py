@@ -81,11 +81,16 @@ async def get_installed_models() -> List[OllamaModel]:
             data = await response.json()
             models = []
             for model in data.get("models", []):
+                # Ensure we have a valid timestamp, default to current time if missing
+                modified = model.get("modified", 0)
+                if not modified or modified < 0:
+                    modified = int(datetime.now().timestamp())
+                    
                 models.append(OllamaModel(
                     name=model["name"],
                     tags=model.get("tags", []),
                     size=model.get("size", 0),
-                    modified=model.get("modified", 0),
+                    modified=modified,
                     version=model.get("version", "unknown")
                 ))
             return models

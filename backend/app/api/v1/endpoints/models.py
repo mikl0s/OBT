@@ -48,6 +48,11 @@ async def list_models(client_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/clients")
+async def list_clients():
+    """List all healthy Ollama clients."""
+    return ollama.get_healthy_clients()
+
 @router.websocket("/generate/{model_name}")
 async def generate(
     websocket: WebSocket,
