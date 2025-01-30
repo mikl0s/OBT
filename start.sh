@@ -102,17 +102,34 @@ echo -e "${GREEN}MongoDB is ready${NC}"
 # Start backend
 echo -e "${BLUE}Starting backend server...${NC}"
 cd "${ROOT_DIR}/backend" || exit 1
-source venv/bin/activate
 
-# Install python3-distutils if missing
-if ! python3 -c "import distutils" > /dev/null 2>&1; then
-    echo -e "${BLUE}Installing python3-distutils...${NC}"
-    sudo apt-get update && sudo apt-get install -y python3-distutils
+# Activate virtual environment if it exists
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+else
+    echo -e "${RED}Virtual environment not found. Please run setup.sh first.${NC}"
+    cleanup_mongodb
+    exit 1
+fi
+
+# Check if main.py exists
+if [ ! -f "app/main.py" ]; then
+    echo -e "${RED}Backend main.py not found at app/main.py${NC}"
+    cleanup_mongodb
+    exit 1
 fi
 
 # Start the backend server
-python3 main.py &
+python3 app/main.py &
 BACKEND_PID=$!
+
+# Wait a moment to check if backend started successfully
+sleep 2
+if ! kill -0 $BACKEND_PID 2>/dev/null; then
+    echo -e "${RED}Backend server failed to start${NC}"
+    cleanup_mongodb
+    exit 1
+fi
 
 # Start frontend
 echo -e "${BLUE}Starting frontend server...${NC}"
