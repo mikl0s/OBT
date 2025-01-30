@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import List, Optional
 
 import aiohttp
+import cpuinfo
 import psutil
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -69,12 +70,14 @@ class OllamaModel(BaseModel):
 
 
 class HardwareInfo(BaseModel):
-    """Hardware information from Ollama."""
+    """Hardware information."""
 
-    cpu_threads: int = Field(default=None, description="Number of CPU threads")
+    cpu_name: str = Field(..., description="CPU model name")
+    cpu_threads: int = Field(..., description="Number of CPU threads")
+    total_memory: int = Field(..., description="Total system memory in bytes")
     gpu_count: int = Field(default=0, description="Number of GPUs")
-    gpu_name: str = Field(default=None, description="GPU name if available")
-    gpu_memory: int = Field(default=None, description="GPU memory in MB if available")
+    gpu_name: Optional[str] = Field(default=None, description="GPU model name")
+    gpu_memory: Optional[int] = Field(default=None, description="GPU memory in bytes")
 
 
 class BenchmarkConfig(BaseModel):
@@ -149,22 +152,52 @@ async def get_installed_models() -> List[OllamaModel]:
 
 
 async def get_hardware_info() -> HardwareInfo:
-    """Get hardware information from Ollama."""
+    """Get hardware information."""
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{settings.OLLAMA_URL}/api/show") as response:
-                if response.status != 200:
-                    return HardwareInfo()
-                data = await response.json()
-                return HardwareInfo(
-                    cpu_threads=data.get("cpu_threads"),
-                    gpu_count=1 if data.get("gpu_info") else 0,
-                    gpu_name=data.get("gpu_info", {}).get("name"),
-                    gpu_memory=data.get("gpu_info", {}).get("memory"),
-                )
+        # Get CPU info
+        cpu_info = cpuinfo.get_cpu_info()
+        cpu_name = cpu_info.get("brand_raw", "Unknown CPU")
+        cpu_threads = psutil.cpu_count(logical=True)
+
+        # Get memory info
+        memory = psutil.virtual_memory()
+        total_memory = memory.total
+
+        # Try to get GPU info using nvidia-smi
+        gpu_count = 0
+        gpu_name = None
+        gpu_memory = None
+
+        try:
+            import pynvml
+
+            pynvml.nvmlInit()
+            gpu_count = pynvml.nvmlDeviceGetCount()
+            if gpu_count > 0:
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                gpu_name = pynvml.nvmlDeviceGetName(handle).decode("utf-8")
+                gpu_memory = pynvml.nvmlDeviceGetMemoryInfo(handle).total
+            pynvml.nvmlShutdown()
+        except Exception as e:
+            logger.debug(f"No NVIDIA GPU found: {e}")
+
+        return HardwareInfo(
+            cpu_name=cpu_name,
+            cpu_threads=cpu_threads,
+            total_memory=total_memory,
+            gpu_count=gpu_count,
+            gpu_name=gpu_name,
+            gpu_memory=gpu_memory,
+        )
     except Exception as e:
-        logger.error(f"Failed to get hardware info: {e}")
-        return HardwareInfo()
+        logger.error(f"Error getting hardware info: {e}")
+        # Return minimal info to avoid registration failure
+        return HardwareInfo(
+            cpu_name="Unknown CPU",
+            cpu_threads=1,
+            total_memory=1024 * 1024 * 1024,  # 1GB
+            gpu_count=0,
+        )
 
 
 async def register_with_server() -> bool:
