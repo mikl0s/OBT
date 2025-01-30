@@ -26,7 +26,7 @@ logger.info(f"Starting Ollama Client v{__version__}")
 
 class Settings(BaseSettings):
     """Application settings."""
-    OBT_SERVER_URL: str = "http://localhost:8001"
+    OBT_SERVER_URL: str = "http://localhost:8001/api/v1"
     OLLAMA_URL: str = "http://localhost:11434"
     CLIENT_PORT: int = 8002
     
