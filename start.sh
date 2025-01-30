@@ -124,22 +124,49 @@ export PYTHONPATH="${ROOT_DIR}/backend:${PYTHONPATH:-}"
 
 # Start the backend server
 cd "${ROOT_DIR}/backend" || exit 1
-# Create temporary file for error output
+echo -e "${BLUE}Running from directory: $(pwd)${NC}"
+echo -e "${BLUE}PYTHONPATH: $PYTHONPATH${NC}"
+echo -e "${BLUE}Python version: $(python3 --version)${NC}"
+
+# Create temporary files for output
 ERROR_LOG=$(mktemp)
-python3 -m app.main 2> "$ERROR_LOG" &
+OUTPUT_LOG=$(mktemp)
+
+# Start the backend server with output capture
+python3 -m app.main > "$OUTPUT_LOG" 2> "$ERROR_LOG" &
 BACKEND_PID=$!
 
-# Wait a moment to check if backend started successfully
-sleep 2
-if ! kill -0 $BACKEND_PID 2>/dev/null; then
-    echo -e "${RED}Backend server failed to start${NC}"
-    echo -e "${RED}Error output:${NC}"
-    cat "$ERROR_LOG"
-    rm "$ERROR_LOG"
-    cleanup_mongodb
-    exit 1
-fi
-rm "$ERROR_LOG"
+# Wait longer for startup and check logs
+for i in {1..5}; do
+    sleep 2
+    if ! kill -0 $BACKEND_PID 2>/dev/null; then
+        echo -e "${RED}Backend server failed to start${NC}"
+        echo -e "${RED}Error output:${NC}"
+        cat "$ERROR_LOG"
+        echo -e "${RED}Standard output:${NC}"
+        cat "$OUTPUT_LOG"
+        rm "$ERROR_LOG" "$OUTPUT_LOG"
+        cleanup_mongodb
+        exit 1
+    fi
+    # Check if server is responding
+    if curl -s http://localhost:8881/api/v1/health > /dev/null; then
+        break
+    fi
+    if [ $i -eq 5 ]; then
+        echo -e "${RED}Backend server failed to respond after 10 seconds${NC}"
+        echo -e "${RED}Error output:${NC}"
+        cat "$ERROR_LOG"
+        echo -e "${RED}Standard output:${NC}"
+        cat "$OUTPUT_LOG"
+        rm "$ERROR_LOG" "$OUTPUT_LOG"
+        kill $BACKEND_PID 2>/dev/null
+        cleanup_mongodb
+        exit 1
+    fi
+done
+
+rm "$ERROR_LOG" "$OUTPUT_LOG"
 
 # Start frontend
 echo -e "${BLUE}Starting frontend server...${NC}"
