@@ -40,7 +40,7 @@ cleanup_mongodb() {
     fi
 }
 
-echo -e "${BLUE}Starting OBT Backend Services...${NC}"
+echo -e "${BLUE}Starting OBT Services...${NC}"
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
@@ -54,6 +54,12 @@ cleanup_mongodb
 # Check if port 8001 is in use
 if lsof -i :8001 > /dev/null 2>&1; then
     echo -e "${RED}Port 8001 is already in use. Please stop any running backend server first.${NC}"
+    exit 1
+fi
+
+# Check if port 5173 is in use
+if lsof -i :5173 > /dev/null 2>&1; then
+    echo -e "${RED}Port 5173 is already in use. Please stop any running frontend server first.${NC}"
     exit 1
 fi
 
@@ -91,10 +97,17 @@ fi
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001 &
 BACKEND_PID=$!
 
+# Start frontend
+echo -e "${BLUE}Starting dashboard frontend...${NC}"
+cd "${ROOT_DIR}/frontend" || exit 1
+pnpm run dev -- --host &
+FRONTEND_PID=$!
+
 # Handle cleanup on script exit
 cleanup() {
     echo -e "${BLUE}Shutting down services...${NC}"
     kill $BACKEND_PID 2>/dev/null
+    kill $FRONTEND_PID 2>/dev/null
     if docker ps | grep -q obt-mongodb; then
         echo -e "${BLUE}Stopping MongoDB container...${NC}"
         docker stop obt-mongodb
@@ -107,8 +120,9 @@ trap cleanup EXIT
 
 # Keep script running and show status
 echo -e "${GREEN}All services are running!${NC}"
-echo -e "${BLUE}Backend:  ${GREEN}http://localhost:8001${NC}"
-echo -e "${BLUE}API Docs: ${GREEN}http://localhost:8001/api/v1/docs${NC}"
+echo -e "${BLUE}Dashboard: ${GREEN}http://localhost:5173${NC}"
+echo -e "${BLUE}Backend:   ${GREEN}http://localhost:8001${NC}"
+echo -e "${BLUE}API Docs:  ${GREEN}http://localhost:8001/api/v1/docs${NC}"
 echo -e "${BLUE}Press Ctrl+C to stop all services${NC}"
 
 # Wait for user interrupt
