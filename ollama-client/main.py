@@ -42,15 +42,15 @@ signal.signal(signal.SIGTERM, handle_shutdown)
 class Settings(BaseSettings):
     """Application settings."""
 
-    OBT_SERVER_URL: str = Field(default="http://localhost:8881")
-    OLLAMA_URL: str = Field(default="http://localhost:11434")
-    CLIENT_ID: str = Field(default="default-client")
-    HEARTBEAT_INTERVAL: int = Field(default=10)  # seconds
+    CLIENT_ID: str = Field(default="default", env="CLIENT_ID")
+    OBT_SERVER_URL: str = Field(default="http://localhost:8881", env="OBT_SERVER_URL")
+    OLLAMA_URL: str = Field(default="http://localhost:11434", env="OLLAMA_URL")
+    registration_id: Optional[str] = None
 
     class Config:
         env_file = ".env"
-        # Allow extra fields in .env to support legacy configs
-        extra = "ignore"
+        env_file_encoding = "utf-8"
+        case_sensitive = True
 
 
 settings = Settings()
