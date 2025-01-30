@@ -50,10 +50,27 @@ if (-not $ollamaRunning) {
     } while (-not $ollamaRunning)
 }
 
+# Check Ollama service
+Write-Host "Checking Ollama service..." -ForegroundColor Blue
+
+# Get the current directory
+$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $scriptPath
+
 # Activate virtual environment
-Write-ColorOutput "Blue" "Activating virtual environment..."
-. .\venv\Scripts\Activate.ps1
+Write-Host "Activating virtual environment..." -ForegroundColor Blue
+$venvPath = Join-Path $scriptPath "venv"
+$activateScript = Join-Path $venvPath "Scripts\Activate.ps1"
+
+if (-not (Test-Path $activateScript)) {
+    Write-Host "Virtual environment not found. Please run install.ps1 first." -ForegroundColor Red
+    exit 1
+}
+
+# Activate the virtual environment
+. $activateScript
 
 # Start the client
-Write-ColorOutput "Blue" "Starting OBT Ollama client..."
-python main.py
+Write-Host "Starting OBT Ollama client..." -ForegroundColor Green
+$pythonPath = Join-Path $venvPath "Scripts\python.exe"
+& $pythonPath main.py
