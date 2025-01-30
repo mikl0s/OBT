@@ -1,4 +1,4 @@
-# Technology Stack
+# OBT Tech Stack
 
 ## Frontend
 - **Framework**: SvelteKit
@@ -41,28 +41,72 @@
   - Local installation detection
   - Cross-platform support (Windows/Linux)
 
-## Architecture Decisions
+## Architecture Overview
 
-### Why FastAPI?
-- Excellent async support for concurrent test execution
-- Built-in OpenAPI documentation
-- Strong typing system for reliable API development
-- Great performance for handling test data streams
+### Components
+1. **OBT Server (Port 8881)**
+   - FastAPI backend server
+   - Handles client registration and health tracking
+   - Maintains client state and model information
+   - Provides REST API for frontend
 
-### Why MongoDB?
-- Flexible schema for varying hardware configurations
-- Good performance for time-series test data
-- Easy scaling if needed
-- Rich query capabilities for dashboard features
+2. **Ollama Client**
+   - Python-based client that connects to OBT server
+   - Runs heartbeat loop every 10 seconds
+   - Monitors local Ollama instance
+   - Reports model status and availability
+   - No HTTP server, uses active connection to OBT
 
-### Why SvelteKit?
-- Excellent performance
-- Built-in SSR capabilities
-- Small bundle size
-- Great developer experience
+3. **Frontend Dashboard**
+   - SvelteKit web application
+   - Connects only to OBT server
+   - Displays model status and availability
+   - Uses Flowbite components for UI
 
-### Why Podman?
-- Daemonless container engine
-- Rootless containers
-- OCI compliance
-- Better security model than Docker
+### Data Flow
+1. Client → Server:
+   - Registration request with client ID
+   - Regular heartbeats with status
+   - Model information updates
+
+2. Server → Frontend:
+   - Client health status
+   - Available models
+   - Error states and diagnostics
+
+### Dependencies
+- **Backend**:
+  - FastAPI
+  - MongoDB
+  - Pydantic for validation
+  - aiohttp for async HTTP
+
+- **Client**:
+  - aiohttp for async HTTP
+  - Pydantic for settings
+  - Python-dotenv for configuration
+
+- **Frontend**:
+  - SvelteKit
+  - Flowbite-Svelte
+  - Tailwind CSS
+
+### Configuration
+- Environment variables used throughout
+- `.env.example` files provided for each component
+- No hardcoded connection strings
+
+### Security
+- All sensitive data in environment variables
+- Cross-origin protections in place
+- Input validation on all endpoints
+
+### Monitoring
+- Client health tracked via heartbeats
+- Connection status monitored
+- Error logging in place
+
+## Development Tools
+- Git for version control
+- pnpm for package management
+- ESLint and Prettier for code formatting
