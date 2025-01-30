@@ -73,13 +73,29 @@ if ! docker run -d \
     -e MONGO_INITDB_DATABASE=obt_db \
     mongo:latest; then
     echo -e "${RED}Failed to start MongoDB container${NC}"
+    docker logs obt-mongodb
     exit 1
 fi
 
 # Wait for MongoDB to be ready
 echo -e "${BLUE}Waiting for MongoDB to be ready...${NC}"
-until docker exec obt-mongodb mongosh --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; do
+MAX_RETRIES=30
+RETRY_COUNT=0
+while ! docker exec obt-mongodb mongosh --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; do
     sleep 1
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $((RETRY_COUNT % 5)) -eq 0 ]; then
+        echo -e "${BLUE}Still waiting for MongoDB (attempt $RETRY_COUNT/$MAX_RETRIES)...${NC}"
+        docker logs --tail 5 obt-mongodb
+    fi
+    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        echo -e "${RED}MongoDB failed to start after $MAX_RETRIES seconds${NC}"
+        echo -e "${RED}Last few lines of MongoDB logs:${NC}"
+        docker logs --tail 20 obt-mongodb
+        docker stop obt-mongodb
+        docker rm obt-mongodb
+        exit 1
+    fi
 done
 echo -e "${GREEN}MongoDB is ready${NC}"
 
