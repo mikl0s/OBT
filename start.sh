@@ -124,16 +124,22 @@ export PYTHONPATH="${ROOT_DIR}/backend:${PYTHONPATH:-}"
 
 # Start the backend server
 cd "${ROOT_DIR}/backend" || exit 1
-python3 -m app.main &
+# Create temporary file for error output
+ERROR_LOG=$(mktemp)
+python3 -m app.main 2> "$ERROR_LOG" &
 BACKEND_PID=$!
 
 # Wait a moment to check if backend started successfully
 sleep 2
 if ! kill -0 $BACKEND_PID 2>/dev/null; then
     echo -e "${RED}Backend server failed to start${NC}"
+    echo -e "${RED}Error output:${NC}"
+    cat "$ERROR_LOG"
+    rm "$ERROR_LOG"
     cleanup_mongodb
     exit 1
 fi
+rm "$ERROR_LOG"
 
 # Start frontend
 echo -e "${BLUE}Starting frontend server...${NC}"
