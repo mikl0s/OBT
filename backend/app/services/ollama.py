@@ -98,7 +98,7 @@ async def generate_completion(
     try:
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(
-                f"{client['url']}/ws/generate/{model}"
+                f"{settings.OLLAMA_URL}/ws/generate/{model}"
             ) as ws:
                 await ws.send_json({"prompt": prompt})
                 

@@ -83,7 +83,6 @@ async def register_with_server() -> bool:
         async with aiohttp.ClientSession() as session:
             params = {
                 "client_id": settings.CLIENT_ID,
-                "client_url": settings.OLLAMA_URL,
             }
             async with session.post(
                 f"{settings.OBT_SERVER_URL}/api/v1/models/register",
