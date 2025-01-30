@@ -55,6 +55,15 @@ class ModelResponse(BaseModel):
     done: bool
     reasoning: Optional[str] = None
 
+class VersionResponse(BaseModel):
+    """Response from version endpoint."""
+    version: str
+
+@app.get("/version", response_model=VersionResponse)
+async def get_version():
+    """Get client version."""
+    return VersionResponse(version=__version__)
+
 async def forward_to_obt(endpoint: str, data: Dict) -> Dict:
     """Forward data to OBT server."""
     logger.debug(f"Forwarding to OBT endpoint {endpoint}")
