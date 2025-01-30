@@ -14,12 +14,15 @@ from fastapi import FastAPI, HTTPException, WebSocket
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
+__version__ = "0.1.0"
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+logger.info(f"Starting Ollama Client v{__version__}")
 
 class Settings(BaseSettings):
     """Application settings."""
@@ -31,7 +34,7 @@ class Settings(BaseSettings):
         env_file = ".env"
 
 settings = Settings()
-app = FastAPI(title="OBT Ollama Client")
+app = FastAPI(title="OBT Ollama Client", version=__version__)
 
 class OllamaModel(BaseModel):
     """Ollama model information."""
@@ -118,15 +121,7 @@ async def list_models():
                 # Forward to OBT server
                 try:
                     model_data = {
-                        "models": [
-                            {
-                                "name": m.name,
-                                "tags": m.tags,
-                                "version": m.version,
-                                "size": m.size,
-                                "modified": m.modified
-                            } for m in models
-                        ]
+                        "models": [m.dict() for m in models]  # Use dict() instead of manual conversion
                     }
                     logger.debug(f"Forwarding model data: {json.dumps(model_data, default=str)}")
                     await forward_to_obt("models/sync", model_data)
