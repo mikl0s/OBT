@@ -127,17 +127,20 @@ cd "${ROOT_DIR}/backend" || exit 1
 echo -e "${BLUE}Running from directory: $(pwd)${NC}"
 echo -e "${BLUE}PYTHONPATH: $PYTHONPATH${NC}"
 echo -e "${BLUE}Python version: $(python3 --version)${NC}"
+echo -e "${BLUE}Installed packages:${NC}"
+pip list
 
 # Create temporary files for output
 ERROR_LOG=$(mktemp)
 OUTPUT_LOG=$(mktemp)
 
 # Start the backend server with output capture
-python3 -m app.main > "$OUTPUT_LOG" 2> "$ERROR_LOG" &
+echo -e "${BLUE}Starting FastAPI with uvicorn...${NC}"
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8881 --reload > "$OUTPUT_LOG" 2> "$ERROR_LOG" &
 BACKEND_PID=$!
 
 # Wait longer for startup and check logs
-for i in {1..5}; do
+for i in {1..10}; do
     sleep 2
     if ! kill -0 $BACKEND_PID 2>/dev/null; then
         echo -e "${RED}Backend server failed to start${NC}"
@@ -151,10 +154,12 @@ for i in {1..5}; do
     fi
     # Check if server is responding
     if curl -s http://localhost:8881/api/v1/health > /dev/null; then
+        echo -e "${GREEN}Backend server is responding${NC}"
         break
     fi
-    if [ $i -eq 5 ]; then
-        echo -e "${RED}Backend server failed to respond after 10 seconds${NC}"
+    echo -e "${BLUE}Waiting for backend server (attempt $i/10)...${NC}"
+    if [ $i -eq 10 ]; then
+        echo -e "${RED}Backend server failed to respond after 20 seconds${NC}"
         echo -e "${RED}Error output:${NC}"
         cat "$ERROR_LOG"
         echo -e "${RED}Standard output:${NC}"
