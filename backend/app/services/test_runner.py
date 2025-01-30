@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from app.models.ollama import TestResult, TestSession, TestStatus, TestType
 from app.services.hardware import get_system_info
@@ -40,7 +40,7 @@ async def run_test_session(
 
         session.status = TestStatus.COMPLETED
         session.end_time = datetime.utcnow()
-    except Exception as e:
+    except Exception:
         session.status = TestStatus.ERROR
         session.end_time = datetime.utcnow()
         # Log error and update session status in database
@@ -50,7 +50,7 @@ async def run_model_tests(model_name: str, prompts: Dict[str, str]) -> List[Test
     """Run all test types for a specific model."""
     results: List[TestResult] = []
 
-    for prompt_id, prompt_content in prompts.items():
+    for _prompt_id, prompt_content in prompts.items():
         result = TestResult(
             test_type=TestType.COMPLETION,  # Default to completion for now
             status=TestStatus.RUNNING,

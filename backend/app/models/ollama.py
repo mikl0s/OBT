@@ -49,12 +49,16 @@ class OllamaResponse(MongoModel):
     """Individual Ollama response."""
 
     response: str = Field(..., description="The actual response text")
-    reasoning: Optional[str] = Field(None, description="Reasoning/thought process if available")
+    reasoning: Optional[str] = Field(
+        None, description="Reasoning/thought process if available"
+    )
     done: bool = Field(..., description="Whether this is the final response")
     total_duration: float = Field(..., description="Total processing time in seconds")
     load_duration: float = Field(..., description="Time spent loading the model")
     prompt_eval_count: int = Field(..., description="Number of tokens in the prompt")
-    prompt_eval_duration: float = Field(..., description="Time spent processing the prompt")
+    prompt_eval_duration: float = Field(
+        ..., description="Time spent processing the prompt"
+    )
     eval_count: int = Field(..., description="Number of tokens in the response")
     eval_duration: float = Field(..., description="Time spent generating the response")
 
@@ -88,7 +92,9 @@ class TestResult(MongoModel):
 class TestSession(MongoModel):
     """Complete test session."""
 
-    hardware_config_id: str = Field(..., description="Reference to hardware configuration")
+    hardware_config_id: str = Field(
+        ..., description="Reference to hardware configuration"
+    )
     status: TestStatus = Field(..., description="Overall session status")
     start_time: datetime = Field(..., description="Session start time")
     end_time: Optional[datetime] = Field(None, description="Session end time")

@@ -1,7 +1,7 @@
 # OBT Tech Stack
 
 ## Frontend
-- **Framework**: SvelteKit
+- **Framework**: SvelteKit 2.0+
   - Fast, lightweight, and excellent DX
   - Built-in SSR capabilities
   - Real-time updates without page refreshes
@@ -10,26 +10,54 @@
   - TailwindCSS for styling
   - Dark theme by default
   - Responsive design
+  - Chart.js for visualizations
 - **State Management**: 
   - Svelte stores for client state
   - Real-time model updates
   - Reactive search and filtering
+- **Testing**: 
+  - Playwright for E2E testing
+  - Vitest for unit testing
+  - c8 for coverage reporting
+- **Code Quality**: 
+  - ESLint with svelte plugin
+  - Prettier for formatting
+  - eslint-plugin-import for import order
+  - pre-commit hooks for automation
 
 ## Backend
-- **Framework**: FastAPI (Python)
+- **Framework**: FastAPI (0.100+) (Python)
   - High performance async server
   - Automatic OpenAPI documentation
   - Type-safe API endpoints
   - Real-time client tracking
+- **Database**: 
+  - SQLAlchemy ORM
+  - SQLite for development
+  - PostgreSQL for production
+- **Testing**: 
+  - pytest for unit tests
+  - pytest-asyncio for async testing
+  - pytest-cov for coverage
+- **Code Quality**: 
+  - Ruff for linting
+  - Black for formatting
+  - isort for import sorting
+  - pre-commit hooks for automation
 - **Client Management**: 
   - Async client registration
   - Heartbeat monitoring
   - Automatic cleanup of inactive clients
   - Cross-platform support
-- **Testing**: 
-  - Pytest for backend
-  - Playwright for E2E
-  - Vitest for frontend
+
+## Ollama Client
+- **Core**: 
+  - Python 3.10+
+  - aiohttp for async HTTP
+  - pydantic for data validation
+- **Code Quality**: 
+  - Same tools as backend
+  - Shared pre-commit configuration
 
 ## Infrastructure
 - **Development**: 
@@ -37,6 +65,12 @@
   - ESLint + Prettier for code formatting
   - Pre-commit hooks for quality control
   - Environment-based configuration
+  - Docker for containerization
+  - Docker Compose for orchestration
+- **Monitoring**: 
+  - Logging with Python's logging
+  - Custom health check endpoints
+  - Client heartbeat system
 
 ## External Integrations
 - **Ollama API**: 
@@ -107,3 +141,13 @@
 - No hardcoded credentials
 - Secure cross-origin policies
 - Input validation on all endpoints
+- Environment variables for secrets
+- CORS configuration
+- Rate limiting
+- Input validation with Pydantic
+
+### Performance
+- Async I/O throughout
+- Connection pooling
+- Hardware-aware testing
+- Benchmark result caching

@@ -8,17 +8,28 @@
   - `app/api/v1/endpoints/`: REST API endpoints
   - `app/services/`: Core business logic and client management
   - `app/models/`: Data models and schemas
+  - `app/benchmarks/`: Benchmarking functionality
+    - `core/`: Core benchmarking engine
+    - `schemas/`: Data models
+    - `storage/`: Result storage
+    - `tests/`: Unit tests
 
 ### Ollama Client (`/ollama-client`)
 - **Python Client Service**
   - `main.py`: Client service entry point
   - `models.py`: Data models for client-server communication
   - Installation scripts for Windows/Linux
+  - Configuration for client-server communication
 
 ### Frontend (`/frontend`)
 - **SvelteKit Application**
   - `src/routes/`: Page components and routing
+    - `benchmarks/`: New benchmarking UI components
+    - `models/`: Model management interface
+    - `tests/`: Test execution interface
   - `src/lib/`: Shared components and utilities
+    - `stores/`: Svelte stores for state management
+    - `types/`: TypeScript type definitions
   - `src/stores/`: State management
   - Dark-themed UI with Flowbite components
 
@@ -46,6 +57,7 @@ uvicorn==0.23.0
 pydantic==2.0.0
 python-dotenv==1.0.0
 aiohttp==3.8.5
+sqlalchemy==1.4.42
 ```
 
 ### Frontend Dependencies
@@ -53,6 +65,7 @@ aiohttp==3.8.5
 @sveltejs/kit==1.20.4
 flowbite-svelte==0.44.4
 tailwindcss==3.3.3
+typescript==4.9.4
 ```
 
 ### Client Dependencies
@@ -79,6 +92,25 @@ python-dotenv==1.0.0
 - Added responsive table layout
 - Created search and filter interface
 - Added model selection capabilities
+
+### Performance Testing Features
+- Added comprehensive benchmarking suite
+- Implemented hardware-aware testing (CPU/GPU)
+- Added detailed performance metrics tracking
+- Created benchmark comparison visualization
+
+### Code Quality Improvements
+- Added pre-commit hooks for consistent code quality
+- Updated linting configurations:
+  - ESLint and Prettier for frontend
+  - Ruff, Black, and isort for backend
+- Improved exception handling and error reporting
+- Enhanced code organization and modularity
+
+### UI Enhancements
+- Added benchmark results visualization
+- Implemented hardware configuration interface
+- Enhanced model selection and comparison views
 
 ## User Feedback Integration
 
@@ -117,6 +149,11 @@ python-dotenv==1.0.0
 3. Add tests
 4. Update documentation
 5. Create pull request
+6. Code changes must pass pre-commit hooks:
+   - Frontend: prettier → eslint-import → eslint → eslint-svelte
+   - Backend: isort → black → ruff
+7. All tests must pass before merging
+8. Documentation must be updated for significant changes
 
 ## Future Considerations
 

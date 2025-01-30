@@ -1,13 +1,10 @@
 """Ollama client that connects to OBT server."""
 
 import asyncio
-import json
 import logging
-import os
 import signal
 from datetime import datetime
-from typing import Dict, List, Optional
-import dateutil.parser
+from typing import List
 
 import aiohttp
 from pydantic import BaseModel, Field
@@ -17,8 +14,7 @@ __version__ = "0.1.0"
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 logger.info(f"Starting Ollama Client v{__version__}")
@@ -26,31 +22,38 @@ logger.info(f"Starting Ollama Client v{__version__}")
 # Global flag for graceful shutdown
 shutdown_event = asyncio.Event()
 
+
 def handle_shutdown(signum, frame):
     """Handle shutdown signals gracefully."""
     logger.info("Shutdown signal received, cleaning up...")
     shutdown_event.set()
 
+
 # Register signal handlers
 signal.signal(signal.SIGINT, handle_shutdown)
 signal.signal(signal.SIGTERM, handle_shutdown)
 
+
 class Settings(BaseSettings):
     """Application settings."""
+
     OBT_SERVER_URL: str = Field(default="http://localhost:8881")
     OLLAMA_URL: str = Field(default="http://localhost:11434")
     CLIENT_ID: str = Field(default="default-client")
     HEARTBEAT_INTERVAL: int = Field(default=10)  # seconds
-    
+
     class Config:
         env_file = ".env"
         # Allow extra fields in .env to support legacy configs
         extra = "ignore"
 
+
 settings = Settings()
+
 
 class OllamaModel(BaseModel):
     """Ollama model information."""
+
     name: str
     tags: List[str] = []
     size: int = 0
@@ -58,9 +61,8 @@ class OllamaModel(BaseModel):
     version: str = "unknown"
 
     class Config:
-        json_encoders = {
-            float: lambda v: v
-        }
+        json_encoders = {float: lambda v: v}
+
 
 async def check_ollama_connection() -> bool:
     """Check if Ollama is available."""
@@ -71,6 +73,7 @@ async def check_ollama_connection() -> bool:
     except Exception as e:
         logger.error(f"Failed to connect to Ollama: {e}")
         return False
+
 
 async def get_installed_models() -> List[OllamaModel]:
     """Get list of installed models from Ollama."""
@@ -85,27 +88,37 @@ async def get_installed_models() -> List[OllamaModel]:
                 modified = model.get("modified", 0)
                 if not modified or modified < 0:
                     modified = int(datetime.now().timestamp())
-                    
-                models.append(OllamaModel(
-                    name=model["name"],
-                    tags=model.get("tags", []),
-                    size=model.get("size", 0),
-                    modified=modified,
-                    version=model.get("version", "unknown")
-                ))
+
+                models.append(
+                    OllamaModel(
+                        name=model["name"],
+                        tags=model.get("tags", []),
+                        size=model.get("size", 0),
+                        modified=modified,
+                        version=model.get("version", "unknown"),
+                    )
+                )
             return models
+
 
 async def register_with_server() -> bool:
     """Register this client with the OBT server."""
     try:
-        logger.info(f"Registering with OBT server as {settings.CLIENT_ID} (version {__version__})")
+        logger.info(
+            f"Registering with OBT server as {settings.CLIENT_ID} "
+            f"(version {__version__})"
+        )
         params = {
             "client_id": settings.CLIENT_ID,
             "version": __version__,
         }
         url = f"{settings.OBT_SERVER_URL}/api/v1/models/register"
-        logger.debug(f"Registration URL: {url}?client_id={params['client_id']}&version={params['version']}")
-        
+        logger.debug(
+            f"Registration URL: {url}?"
+            f"client_id={params['client_id']}&"
+            f"version={params['version']}"
+        )
+
         async with aiohttp.ClientSession() as session:
             async with session.post(url, params=params) as response:
                 if response.status != 200:
@@ -117,15 +130,16 @@ async def register_with_server() -> bool:
         logger.error(f"Failed to register with server: {e}")
         return False
 
+
 async def send_heartbeat() -> bool:
     """Send heartbeat to server with current status."""
     try:
         ollama_available = await check_ollama_connection()
         models = await get_installed_models() if ollama_available else []
-        
+
         # Convert models to dict and handle Pydantic deprecation
         models_data = [model.model_dump() for model in models]
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{settings.OBT_SERVER_URL}/api/v1/models/heartbeat",
@@ -134,9 +148,7 @@ async def send_heartbeat() -> bool:
                     "version": __version__,
                     "available": str(ollama_available).lower(),
                 },
-                json={
-                    "models": models_data
-                }
+                json={"models": models_data},
             ) as response:
                 if response.status != 200:
                     logger.error(f"Failed to send heartbeat: {await response.text()}")
@@ -146,10 +158,11 @@ async def send_heartbeat() -> bool:
         logger.error(f"Failed to send heartbeat: {e}")
         return False
 
+
 async def heartbeat_loop():
     """Main heartbeat loop."""
     logger.info(f"Connecting to OBT server at {settings.OBT_SERVER_URL}")
-    
+
     while not shutdown_event.is_set():
         if not await register_with_server():
             logger.error("Failed to register, retrying in 10 seconds...")
@@ -163,11 +176,14 @@ async def heartbeat_loop():
             if not await send_heartbeat():
                 break
             try:
-                await asyncio.wait_for(shutdown_event.wait(), timeout=settings.HEARTBEAT_INTERVAL)
+                await asyncio.wait_for(
+                    shutdown_event.wait(), timeout=settings.HEARTBEAT_INTERVAL
+                )
             except asyncio.TimeoutError:
                 continue
-    
+
     logger.info("Heartbeat loop stopped")
+
 
 async def main():
     """Main entry point."""
@@ -177,6 +193,7 @@ async def main():
         logger.error(f"Unexpected error: {e}")
     finally:
         logger.info("Shutting down client...")
+
 
 if __name__ == "__main__":
     try:
