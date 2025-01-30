@@ -10,9 +10,9 @@ from app.services import ollama
 router = APIRouter()
 
 @router.post("/register")
-async def register_client(client_id: str):
+async def register_client(client_id: str, version: str):
     """Register an Ollama client."""
-    await ollama.register_client(client_id)
+    await ollama.register_client(client_id, version)
     return {"status": "success"}
 
 @router.post("/sync")

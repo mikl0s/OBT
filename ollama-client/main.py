@@ -83,13 +83,11 @@ async def register_with_server() -> bool:
         async with aiohttp.ClientSession() as session:
             params = {
                 "client_id": settings.CLIENT_ID,
+                "version": __version__,
             }
             async with session.post(
                 f"{settings.OBT_SERVER_URL}/api/v1/models/register",
                 params=params,
-                json={
-                    "version": __version__,
-                }
             ) as response:
                 if response.status != 200:
                     logger.error(f"Failed to register: {await response.text()}")
