@@ -59,6 +59,29 @@ class VersionResponse(BaseModel):
     """Response from version endpoint."""
     version: str
 
+class HealthResponse(BaseModel):
+    """Response from health check endpoint."""
+    status: str
+    version: str
+    ollama_connected: bool
+
+@app.get("/health", response_model=HealthResponse)
+async def health_check():
+    """Check health status of the client."""
+    try:
+        # Check Ollama connection
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{settings.OLLAMA_URL}/api/tags") as response:
+                ollama_connected = response.status == 200
+    except Exception:
+        ollama_connected = False
+
+    return HealthResponse(
+        status="healthy",
+        version=__version__,
+        ollama_connected=ollama_connected
+    )
+
 @app.get("/version", response_model=VersionResponse)
 async def get_version():
     """Get client version."""

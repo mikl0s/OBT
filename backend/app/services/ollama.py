@@ -13,13 +13,40 @@ from app.models.ollama import OllamaModel, OllamaResponse, TestType
 # Store connected clients
 ollama_clients: Dict[str, str] = {}
 
+async def check_client_health(client_url: str) -> bool:
+    """Check if client is healthy and connected to Ollama."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{client_url}/health") as response:
+                if response.status != 200:
+                    return False
+                data = await response.json()
+                return data.get("status") == "healthy" and data.get("ollama_connected", False)
+    except Exception:
+        return False
+
 async def register_client(client_url: str, client_id: str):
     """Register an Ollama client."""
+    # Check client health before registering
+    if not await check_client_health(client_url):
+        raise HTTPException(
+            status_code=400,
+            detail="Client is not healthy or not connected to Ollama"
+        )
     ollama_clients[client_id] = client_url
 
 async def get_client(client_id: str) -> Optional[str]:
     """Get client URL by ID."""
-    return ollama_clients.get(client_id)
+    client_url = ollama_clients.get(client_id)
+    if not client_url:
+        return None
+        
+    # Check if client is still healthy
+    if not await check_client_health(client_url):
+        del ollama_clients[client_id]
+        return None
+        
+    return client_url
 
 async def sync_models(client_id: str, models: List[Dict]) -> List[OllamaModel]:
     """Sync models from a client."""
@@ -40,7 +67,7 @@ async def get_installed_models(client_id: str) -> List[OllamaModel]:
     if not client_url:
         raise HTTPException(
             status_code=404,
-            detail=f"Ollama client {client_id} not found"
+            detail=f"Ollama client {client_id} not found or not healthy"
         )
         
     try:
@@ -73,7 +100,7 @@ async def generate_completion(
     if not client_url:
         raise HTTPException(
             status_code=404,
-            detail=f"Ollama client {client_id} not found"
+            detail=f"Ollama client {client_id} not found or not healthy"
         )
         
     try:
