@@ -6,6 +6,7 @@ import logging
 import os
 from datetime import datetime
 from typing import Dict, List, Optional
+import dateutil.parser
 
 import aiohttp
 import uvicorn
@@ -37,12 +38,12 @@ class OllamaModel(BaseModel):
     name: str
     tags: List[str] = []
     size: int = 0
-    modified: datetime
+    modified: float
     version: str = "unknown"
 
     class Config:
         json_encoders = {
-            datetime: lambda v: v.timestamp()
+            float: lambda v: v
         }
 
 class ModelResponse(BaseModel):
@@ -101,7 +102,7 @@ async def list_models():
                             tags=model.get("tags", []),
                             version=model.get("version", "unknown"),
                             size=model.get("size", 0),
-                            modified=datetime.fromtimestamp(model.get("modified", 0))
+                            modified=model.get("modified", 0)
                         )
                         models.append(model_obj)
                     except Exception as e:
@@ -119,7 +120,7 @@ async def list_models():
                                 "tags": m.tags,
                                 "version": m.version,
                                 "size": m.size,
-                                "modified": m.modified.timestamp()
+                                "modified": m.modified
                             } for m in models
                         ]
                     }
