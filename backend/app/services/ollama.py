@@ -3,6 +3,7 @@
 import json
 from datetime import datetime
 from typing import Dict, List, Optional
+import logging
 
 import aiohttp
 from fastapi import HTTPException, WebSocket
@@ -12,6 +13,8 @@ from app.models.ollama import OllamaModel, OllamaResponse, TestType
 
 # Store connected clients with their last heartbeat time and status
 ollama_clients: Dict[str, Dict] = {}
+
+logger = logging.getLogger(__name__)
 
 async def register_client(client_id: str, version: str):
     """Register an Ollama client."""
@@ -79,6 +82,18 @@ async def get_installed_models(client_id: str) -> List[OllamaModel]:
             detail=f"Ollama client {client_id} not found or not healthy"
         )
     return client["models"]
+
+async def update_client_status(client_id: str, version: str, available: bool, models: List[dict]):
+    """Update client status from heartbeat."""
+    if client_id not in ollama_clients:
+        logger.warning(f"Received heartbeat from unregistered client: {client_id}")
+        return
+        
+    client = ollama_clients[client_id]
+    client["version"] = version
+    client["available"] = available
+    client["last_heartbeat"] = datetime.now()
+    client["models"] = models
 
 async def generate_completion(
     client_id: str,

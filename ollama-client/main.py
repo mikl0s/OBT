@@ -121,11 +121,13 @@ async def send_heartbeat() -> bool:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{settings.OBT_SERVER_URL}/api/v1/models/heartbeat",
-                params={"client_id": settings.CLIENT_ID},
-                json={
+                params={
+                    "client_id": settings.CLIENT_ID,
                     "version": __version__,
-                    "available": ollama_available,
-                    "models": [model.dict() for model in models]
+                    "available": str(ollama_available).lower(),  # Convert to string for query param
+                },
+                json={
+                    "models": [model.model_dump() for model in models]  # Use model_dump() instead of dict()
                 }
             ) as response:
                 if response.status != 200:

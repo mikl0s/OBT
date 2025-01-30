@@ -1,6 +1,6 @@
 """Models endpoints."""
 
-from typing import List
+from typing import List, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, Query
 
@@ -22,6 +22,17 @@ async def register_client(
 async def sync_models(client_id: str, models: List[dict]):
     """Sync models from a client."""
     return await ollama.sync_models(client_id, models)
+
+@router.post("/heartbeat")
+async def client_heartbeat(
+    client_id: str = Query(..., description="Client identifier"),
+    version: str = Query(..., description="Client version"),
+    available: bool = Query(..., description="Whether Ollama is available"),
+    models: List[Dict] = None,
+):
+    """Update client heartbeat status."""
+    await ollama.update_client_status(client_id, version, available, models or [])
+    return {"status": "success"}
 
 @router.get("/", response_model=List[OllamaModel])
 async def list_models(client_id: str):
