@@ -81,10 +81,14 @@ async def register_with_server() -> bool:
     """Register this client with the OBT server."""
     try:
         async with aiohttp.ClientSession() as session:
+            params = {
+                "client_id": settings.CLIENT_ID,
+                "client_url": settings.OLLAMA_URL,
+            }
             async with session.post(
                 f"{settings.OBT_SERVER_URL}/api/v1/models/register",
+                params=params,
                 json={
-                    "client_id": settings.CLIENT_ID,
                     "version": __version__,
                 }
             ) as response:
