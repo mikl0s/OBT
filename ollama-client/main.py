@@ -201,45 +201,36 @@ async def get_hardware_info() -> HardwareInfo:
 
 
 async def register_with_server() -> bool:
-    """Register this client with the OBT server."""
+    """Register with OBT server."""
     try:
-        logger.info(
-            f"Registering with OBT server as {settings.CLIENT_ID} "
-            f"(version {__version__})"
-        )
-        params = {
-            "client_id": settings.CLIENT_ID,
-            "version": __version__,
-        }
-        url = f"{settings.OBT_SERVER_URL}/api/v1/models/register"
-        logger.debug(
-            f"Registration URL: {url}?"
-            f"client_id={params['client_id']}&"
-            f"version={params['version']}"
-        )
-
-        # Get hardware info for registration
+        # Get hardware info first
         hardware = await get_hardware_info()
+        logger.debug(f"Hardware info: {hardware.model_dump_json()}")
 
+        # Build registration URL
+        registration_url = (
+            f"{settings.OBT_SERVER_URL}/api/v1/models/register"
+            f"?client_id={settings.CLIENT_ID}&version={__version__}"
+        )
+        logger.debug(f"Registration URL: {registration_url}")
+
+        # Send registration request with hardware info
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                url,
-                params=params,
+                registration_url,
                 json={"hardware": hardware.model_dump()},
+                headers={"Content-Type": "application/json"},
             ) as response:
                 if response.status != 200:
-                    logger.error(f"Failed to register: {await response.text()}")
+                    error_text = await response.text()
+                    logger.error(f"Failed to register: {error_text}")
                     return False
-
                 data = await response.json()
-                global registration_id
-                registration_id = data["registration_id"]
-                logger.info(
-                    f"Successfully registered with OBT server. Registration ID: {registration_id}"
-                )
+                settings.registration_id = data.get("registration_id")
+                logger.info(f"Registered with ID: {settings.registration_id}")
                 return True
     except Exception as e:
-        logger.error(f"Failed to register with server: {e}")
+        logger.error(f"Failed to register: {e}")
         return False
 
 
