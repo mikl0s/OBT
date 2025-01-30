@@ -32,6 +32,11 @@ class OllamaModel(BaseModel):
     modified: datetime
     version: str = "unknown"
 
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.timestamp()
+        }
+
 class ModelResponse(BaseModel):
     """Response from model endpoint."""
     response: str
