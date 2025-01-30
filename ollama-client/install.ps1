@@ -29,7 +29,8 @@ function Write-ColorOutput($ForegroundColor) {
 function Get-GitHubFile {
     param (
         [string]$FileName,
-        [string]$TargetPath
+        [string]$TargetPath,
+        [switch]$Force
     )
     
     Write-ColorOutput "Blue" "Downloading $FileName from GitHub..."
@@ -38,6 +39,9 @@ function Get-GitHubFile {
         $webClient = New-Object System.Net.WebClient
         $webClient.Headers.Add("Cache-Control", "no-cache")
         $webClient.Headers.Add("Pragma", "no-cache")
+        if ($Force -and (Test-Path $TargetPath)) {
+            Remove-Item $TargetPath
+        }
         $webClient.DownloadFile($url, $TargetPath)
         if (-not (Test-Path $TargetPath)) {
             throw "Failed to download $FileName"
@@ -67,7 +71,11 @@ $requiredFiles = @(
 )
 
 foreach ($file in $requiredFiles) {
-    Get-GitHubFile -FileName $file -TargetPath (Join-Path $installDir $file)
+    if ($file -eq ".env") {
+        Get-GitHubFile -FileName $file -TargetPath (Join-Path $installDir $file)
+    } else {
+        Get-GitHubFile -FileName $file -TargetPath (Join-Path $installDir $file) -Force
+    }
 }
 
 # Check Python installation
