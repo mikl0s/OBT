@@ -16,7 +16,7 @@ class OllamaModel(MongoModel):
     tags: List[str] = Field(default_factory=list, description="Model tags")
     version: str = Field(..., description="Model version")
     size: int = Field(..., description="Model size in bytes")
-    modified: datetime = Field(..., description="Last modification date")
+    modified: float = Field(..., description="Last modification timestamp")
 
 
 class TestType(str, Enum):

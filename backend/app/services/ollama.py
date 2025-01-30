@@ -29,7 +29,7 @@ async def sync_models(client_id: str, models: List[Dict]) -> List[OllamaModel]:
             tags=model.get("tags", []),
             version=model.get("version", "unknown"),
             size=model.get("size", 0),
-            modified=datetime.fromtimestamp(model.get("modified", 0))
+            modified=model.get("modified", 0)  # Store as timestamp
         )
         for model in models
     ]
@@ -49,23 +49,16 @@ async def get_installed_models(client_id: str) -> List[OllamaModel]:
                 if response.status != 200:
                     raise HTTPException(
                         status_code=response.status,
-                        detail="Failed to fetch models from Ollama client"
+                        detail=f"Failed to fetch models from client: {await response.text()}"
                     )
+                    
                 data = await response.json()
-                return [
-                    OllamaModel(
-                        name=model["name"],
-                        tags=model.get("tags", []),
-                        version=model.get("version", "unknown"),
-                        size=model.get("size", 0),
-                        modified=datetime.fromtimestamp(model.get("modified", 0))
-                    )
-                    for model in data
-                ]
-    except Exception as e:
+                return await sync_models(client_id, data)
+                
+    except aiohttp.ClientError as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to list models: {str(e)}"
+            detail=f"Failed to connect to Ollama client: {str(e)}"
         )
 
 async def generate_completion(
