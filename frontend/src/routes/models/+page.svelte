@@ -8,24 +8,19 @@
 
   const API_URL = 'http://localhost:8001/api/v1';
   const CLIENT_ID = 'frontend-client';
+  const CLIENT_URL = 'http://localhost:8002';
 
   onMount(async () => {
     try {
       // Register client first
-      const registerResponse = await fetch(`${API_URL}/models/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          client_url: 'http://localhost:8002',
-          client_id: CLIENT_ID
-        })
-      });
+      const registerResponse = await fetch(
+        `${API_URL}/models/register?client_url=${encodeURIComponent(CLIENT_URL)}&client_id=${encodeURIComponent(CLIENT_ID)}`,
+        { method: 'POST' }
+      );
       if (!registerResponse.ok) throw new Error('Failed to register client');
 
       // Then fetch models
-      const modelsResponse = await fetch(`${API_URL}/models?client_id=${CLIENT_ID}`);
+      const modelsResponse = await fetch(`${API_URL}/models?client_id=${encodeURIComponent(CLIENT_ID)}`);
       if (!modelsResponse.ok) throw new Error('Failed to fetch models');
       models = await modelsResponse.json();
     } catch (e) {
