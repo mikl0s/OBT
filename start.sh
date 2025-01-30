@@ -40,35 +40,7 @@ cleanup_mongodb() {
     fi
 }
 
-# Function to check and setup Ollama
-setup_ollama() {
-    if ! command -v ollama &> /dev/null; then
-        echo -e "${BLUE}Installing Ollama...${NC}"
-        curl -fsSL https://ollama.ai/install.sh | sh
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Failed to install Ollama${NC}"
-            exit 1
-        fi
-    fi
-
-    # Check if Ollama is running
-    if ! curl -s http://localhost:11434/api/tags &> /dev/null; then
-        echo -e "${BLUE}Starting Ollama service...${NC}"
-        ollama serve &
-        OLLAMA_PID=$!
-        
-        # Wait for Ollama to be ready
-        echo -e "${BLUE}Waiting for Ollama to be ready...${NC}"
-        until curl -s http://localhost:11434/api/tags &> /dev/null; do
-            sleep 1
-        done
-        echo -e "${GREEN}Ollama is ready${NC}"
-    else
-        echo -e "${GREEN}Ollama is already running${NC}"
-    fi
-}
-
-echo -e "${BLUE}Starting Ollama Benchmark Tool...${NC}"
+echo -e "${BLUE}Starting OBT Backend Services...${NC}"
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
@@ -79,18 +51,9 @@ fi
 # Clean up MongoDB
 cleanup_mongodb
 
-# Setup Ollama
-setup_ollama
-
 # Check if port 8001 is in use
 if lsof -i :8001 > /dev/null 2>&1; then
     echo -e "${RED}Port 8001 is already in use. Please stop any running backend server first.${NC}"
-    exit 1
-fi
-
-# Check if port 5173 is in use
-if lsof -i :5173 > /dev/null 2>&1; then
-    echo -e "${RED}Port 5173 is already in use. Please stop any running frontend server first.${NC}"
     exit 1
 fi
 
@@ -128,25 +91,14 @@ fi
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001 &
 BACKEND_PID=$!
 
-# Start frontend
-echo -e "${BLUE}Starting frontend server...${NC}"
-cd "${ROOT_DIR}/frontend" || exit 1
-pnpm run dev -- --host &
-FRONTEND_PID=$!
-
 # Handle cleanup on script exit
 cleanup() {
     echo -e "${BLUE}Shutting down services...${NC}"
     kill $BACKEND_PID 2>/dev/null
-    kill $FRONTEND_PID 2>/dev/null
     if docker ps | grep -q obt-mongodb; then
         echo -e "${BLUE}Stopping MongoDB container...${NC}"
         docker stop obt-mongodb
         docker rm obt-mongodb
-    fi
-    if [ ! -z "$OLLAMA_PID" ]; then
-        echo -e "${BLUE}Stopping Ollama...${NC}"
-        kill $OLLAMA_PID 2>/dev/null
     fi
     echo -e "${GREEN}Services stopped${NC}"
 }
@@ -155,7 +107,6 @@ trap cleanup EXIT
 
 # Keep script running and show status
 echo -e "${GREEN}All services are running!${NC}"
-echo -e "${BLUE}Frontend: ${GREEN}http://localhost:5173${NC}"
 echo -e "${BLUE}Backend:  ${GREEN}http://localhost:8001${NC}"
 echo -e "${BLUE}API Docs: ${GREEN}http://localhost:8001/api/v1/docs${NC}"
 echo -e "${BLUE}Press Ctrl+C to stop all services${NC}"
