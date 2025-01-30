@@ -71,9 +71,9 @@ if ! podman run -d \
     -e MONGO_INITDB_ROOT_USERNAME=obt_user \
     -e MONGO_INITDB_ROOT_PASSWORD=obt_password \
     -e MONGO_INITDB_DATABASE=obt_db \
-    mongo:latest; then
+    docker.io/library/mongo:latest; then
     echo -e "${RED}Failed to start MongoDB container${NC}"
-    podman logs obt-mongodb
+    podman logs obt-mongodb || true
     exit 1
 fi
 
