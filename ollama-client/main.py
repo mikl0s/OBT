@@ -97,12 +97,16 @@ async def list_models():
                 models = []
                 for model in data.get("models", []):
                     try:
+                        # Parse the ISO timestamp to get Unix timestamp
+                        modified_at = dateutil.parser.parse(model.get("modified_at", "1970-01-01T00:00:00Z"))
+                        modified_timestamp = modified_at.timestamp()
+                        
                         model_obj = OllamaModel(
                             name=model["name"],
                             tags=model.get("tags", []),
                             version=model.get("version", "unknown"),
                             size=model.get("size", 0),
-                            modified=model.get("modified", 0)
+                            modified=modified_timestamp
                         )
                         models.append(model_obj)
                     except Exception as e:
