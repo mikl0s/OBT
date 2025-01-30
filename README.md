@@ -26,81 +26,97 @@
 
 ## 🌟 Features
 
-- 🔍 **Comprehensive Model Discovery**
-  - Automatic detection of local Ollama models
-  - Support for both Windows and Linux environments
+- 🔍 **Multi-Client Model Management**
+  - Automatic discovery of Ollama clients across your network
+  - Real-time client health monitoring and status tracking
+  - Intelligent cleanup of inactive clients
 
-- 📊 **Advanced Benchmarking**
-  - Three distinct test types for thorough evaluation
-  - Real-time performance metrics
-  - Resource usage tracking (CPU, GPU, RAM, VRAM)
+- 📊 **Advanced Model Organization**
+  - Comprehensive model listing with size and modification tracking
+  - Smart search and filtering capabilities
+  - Multi-model selection for batch operations
+  - Sortable columns for easy model management
 
-- 💾 **Hardware Profiling**
-  - Detailed system information collection
-  - Cross-platform compatibility
-  - Complete hardware configuration logging
+- 💾 **Client Health Monitoring**
+  - Automatic client registration and discovery
+  - Real-time heartbeat tracking
+  - Graceful handling of client disconnections
+  - Cross-platform client support (Windows/Linux)
 
-- 📈 **Intuitive Dashboard**
-  - Dark-themed, modern UI
-  - Real-time test monitoring
+- 📈 **Modern User Interface**
+  - Dark-themed, responsive design
+  - Real-time updates without page refreshes
   - Advanced search and filtering capabilities
-  - Beautiful performance visualizations
+  - Intuitive model selection and management
 
 ## 🚀 Getting Started
 
+### Prerequisites
+- Python 3.10 or higher
+- Node.js 18 or higher
+- pnpm package manager
+- Ollama installed on at least one machine in your network
+
 ### Quick Install
 
-**Linux/macOS (Bash):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/install.sh | sudo bash
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/OBT.git
+   cd OBT
+   ```
+
+2. Install backend dependencies:
+   ```bash
+   cd backend
+   python -m venv venv
+   source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+   pip install -r requirements.txt
+   ```
+
+3. Install frontend dependencies:
+   ```bash
+   cd ../frontend
+   pnpm install
+   ```
+
+4. Start the development servers:
+   ```bash
+   # In the backend directory
+   uvicorn app.main:app --reload --port 8881
+
+   # In the frontend directory
+   pnpm dev
+   ```
+
+5. Install and start the Ollama client:
+   ```bash
+   cd ../ollama-client
+   python -m venv venv
+   source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+   pip install -r requirements.txt
+   python main.py
+   ```
+
+6. Open your browser and navigate to `http://localhost:5173`
+
+### Environment Variables
+
+Create a `.env` file in both the backend and ollama-client directories:
+
+```env
+# backend/.env
+PORT=8881
+HOST=0.0.0.0
+CLIENT_TIMEOUT_SECONDS=60
+
+# ollama-client/.env
+OBT_SERVER_URL=http://localhost:8881
+OLLAMA_URL=http://localhost:11434
+CLIENT_ID=my-client
+HEARTBEAT_INTERVAL=10
 ```
 
-**Windows (PowerShell):**
-```powershell
-[System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/install.ps1'))
-```
-
-### Prerequisites
-
-- Linux-based operating system
-- Root/sudo access
-- Git
-
-### Installation
-
-1. **Clone the repository**
-```bash
-git clone https://github.com/mikl0s/OBT.git
-cd OBT
-```
-
-2. **Run the automated installer**
-```bash
-sudo ./install.sh
-```
-
-The installer will automatically set up:
-- Python 3.10+ with required packages
-- Node.js and pnpm
-- Docker/Podman for MongoDB
-- Ollama if not already installed
-
-### Starting OBT
-
-Simply run the start script:
-```bash
-./start.sh
-```
-
-This will:
-1. Start MongoDB in a container
-2. Launch the backend server
-3. Start the frontend development server
-4. Ensure Ollama is running
-
-The dashboard will be available at `http://localhost:5173`
-
-To stop all services gracefully, press `Ctrl+C` in the terminal where `start.sh` is running.
+See `.env.example` in each directory for all available options.
 
 ## 📖 Documentation
 

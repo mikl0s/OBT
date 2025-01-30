@@ -4,42 +4,46 @@
 - **Framework**: SvelteKit
   - Fast, lightweight, and excellent DX
   - Built-in SSR capabilities
+  - Real-time updates without page refreshes
 - **UI Components**: 
   - Flowbite-Svelte for pre-built components
   - TailwindCSS for styling
   - Dark theme by default
+  - Responsive design
 - **State Management**: 
-  - Svelte stores
-  - zod for runtime validation
+  - Svelte stores for client state
+  - Real-time model updates
+  - Reactive search and filtering
 
 ## Backend
 - **Framework**: FastAPI (Python)
-  - High performance
-  - Easy async support
-  - Excellent type hints and validation
-  - OpenAPI documentation out of the box
-- **Database**: 
-  - Primary: MongoDB (via motor for async support)
-  - Secondary (if needed): libSQL
+  - High performance async server
+  - Automatic OpenAPI documentation
+  - Type-safe API endpoints
+  - Real-time client tracking
+- **Client Management**: 
+  - Async client registration
+  - Heartbeat monitoring
+  - Automatic cleanup of inactive clients
+  - Cross-platform support
 - **Testing**: 
   - Pytest for backend
   - Playwright for E2E
   - Vitest for frontend
 
 ## Infrastructure
-- **Containerization**: 
-  - Podman for MongoDB
-  - Optional containers for backend/frontend
 - **Development**: 
   - pnpm for package management
   - ESLint + Prettier for code formatting
   - Pre-commit hooks for quality control
+  - Environment-based configuration
 
 ## External Integrations
 - **Ollama API**: 
   - REST API for model management
-  - Local installation detection
-  - Cross-platform support (Windows/Linux)
+  - Multi-client support
+  - Cross-platform compatibility
+  - Real-time model synchronization
 
 ## Architecture Overview
 
@@ -50,63 +54,56 @@
    - Maintains client state and model information
    - Provides REST API for frontend
 
-2. **Ollama Client**
-   - Python-based client that connects to OBT server
-   - Runs heartbeat loop every 10 seconds
-   - Monitors local Ollama instance
-   - Reports model status and availability
-   - No HTTP server, uses active connection to OBT
+2. **Ollama Clients**
+   - Python-based client service
+   - Automatic registration with server
+   - Regular heartbeat updates
+   - Local model discovery and sync
+   - Cross-platform support (Windows/Linux)
 
-3. **Frontend Dashboard**
-   - SvelteKit web application
-   - Connects only to OBT server
-   - Displays model status and availability
-   - Uses Flowbite components for UI
+3. **Frontend (Port 5173)**
+   - SvelteKit application
+   - Modern dark-themed UI
+   - Real-time updates
+   - Advanced search and filtering
+   - Multi-model selection
 
-### Data Flow
-1. Client → Server:
-   - Registration request with client ID
-   - Regular heartbeats with status
-   - Model information updates
+### Communication Flow
+1. **Client Registration**
+   - Clients auto-register with server on startup
+   - Receive unique client ID
+   - Begin heartbeat cycle
 
-2. Server → Frontend:
-   - Client health status
-   - Available models
-   - Error states and diagnostics
+2. **Health Monitoring**
+   - Regular heartbeat updates (10s default)
+   - Automatic cleanup of inactive clients (60s timeout)
+   - Real-time status updates to frontend
 
-### Dependencies
-- **Backend**:
-  - FastAPI
-  - MongoDB
-  - Pydantic for validation
-  - aiohttp for async HTTP
-
-- **Client**:
-  - aiohttp for async HTTP
-  - Pydantic for settings
-  - Python-dotenv for configuration
-
-- **Frontend**:
-  - SvelteKit
-  - Flowbite-Svelte
-  - Tailwind CSS
+3. **Model Management**
+   - Periodic model sync from clients
+   - Real-time model updates to frontend
+   - Support for model selection and operations
+   - Search and filter capabilities
 
 ### Configuration
-- Environment variables used throughout
-- `.env.example` files provided for each component
-- No hardcoded connection strings
+- **Backend**
+  - Environment-based settings
+  - Configurable timeouts and ports
+  - Cross-origin support for development
 
-### Security
-- All sensitive data in environment variables
-- Cross-origin protections in place
+- **Client**
+  - Configurable server URL
+  - Custom client ID support
+  - Adjustable heartbeat interval
+  - Local Ollama connection settings
+
+- **Frontend**
+  - Development proxy configuration
+  - Environment-based API URLs
+  - Real-time update settings
+
+### Security Considerations
+- All sensitive configuration via environment variables
+- No hardcoded credentials
+- Secure cross-origin policies
 - Input validation on all endpoints
-
-### Monitoring
-- Client health tracked via heartbeats
-- Connection status monitored
-- Error logging in place
-
-## Development Tools
-- Git for version control
-- pnpm for package management
-- ESLint and Prettier for code formatting
