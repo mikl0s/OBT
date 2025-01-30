@@ -81,7 +81,17 @@ async def list_models():
                 ]
                 
                 # Forward to OBT server
-                await forward_to_obt("models/sync", {"models": [m.dict() for m in models]})
+                await forward_to_obt("models/sync", {
+                    "models": [
+                        {
+                            "name": m.name,
+                            "tags": m.tags,
+                            "version": m.version,
+                            "size": m.size,
+                            "modified": m.modified.timestamp()
+                        } for m in models
+                    ]
+                })
                 return models
     except Exception as e:
         raise HTTPException(
