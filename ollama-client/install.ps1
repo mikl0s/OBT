@@ -99,12 +99,15 @@ $venvPython = Join-Path $venvPath "Scripts\python.exe"
 $venvPip = Join-Path $venvPath "Scripts\pip.exe"
 
 # Upgrade pip first
-& $venvPip install --upgrade pip
+Write-ColorOutput "Blue" "Upgrading pip to latest version..."
+& $venvPython -m pip install --upgrade pip==25.0.0
 
 # Install dependencies from requirements.txt
+Write-ColorOutput "Blue" "Installing dependencies from requirements.txt..."
 & $venvPip install -r (Join-Path $installPath "requirements.txt")
 
 # Explicitly install psutil
+Write-ColorOutput "Blue" "Installing psutil..."
 & $venvPip install psutil
 
 # Set up .env file
