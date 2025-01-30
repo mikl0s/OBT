@@ -81,14 +81,15 @@ async def register_with_server() -> bool:
     """Register this client with the OBT server."""
     try:
         logger.info(f"Registering with OBT server as {settings.CLIENT_ID} (version {__version__})")
+        params = {
+            "client_id": settings.CLIENT_ID,
+            "version": __version__,
+        }
+        url = f"{settings.OBT_SERVER_URL}/api/v1/models/register"
+        logger.debug(f"Registration URL: {url}?client_id={params['client_id']}&version={params['version']}")
+        
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{settings.OBT_SERVER_URL}/api/v1/models/register",
-                params={
-                    "client_id": settings.CLIENT_ID,
-                    "version": __version__,
-                }
-            ) as response:
+            async with session.post(url, params=params) as response:
                 if response.status != 200:
                     logger.error(f"Failed to register: {await response.text()}")
                     return False

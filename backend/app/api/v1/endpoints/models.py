@@ -2,7 +2,7 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, Query
 
 from app.models.ollama import OllamaModel, OllamaResponse
 from app.services import ollama
@@ -10,7 +10,10 @@ from app.services import ollama
 router = APIRouter()
 
 @router.post("/register")
-async def register_client(client_id: str, version: str):
+async def register_client(
+    client_id: str = Query(..., description="Client identifier"),
+    version: str = Query(..., description="Client version")
+):
     """Register an Ollama client."""
     await ollama.register_client(client_id, version)
     return {"status": "success"}
