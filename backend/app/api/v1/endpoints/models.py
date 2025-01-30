@@ -5,6 +5,7 @@ from typing import Dict, List
 from fastapi import APIRouter, Body, HTTPException, Query, WebSocket
 from pydantic import BaseModel
 
+from app.models.hardware import HardwareInfo
 from app.models.ollama import OllamaModel
 from app.services import ollama
 
@@ -17,14 +18,28 @@ class HeartbeatRequest(BaseModel):
     models: List[Dict]
 
 
-@router.post("/register")
+class RegistrationRequest(BaseModel):
+    """Registration request body."""
+
+    hardware: HardwareInfo
+
+
+class RegistrationResponse(BaseModel):
+    """Registration response."""
+
+    status: str
+    registration_id: str
+
+
+@router.post("/register", response_model=RegistrationResponse)
 async def register_client(
     client_id: str = Query(..., description="Client identifier"),
     version: str = Query(..., description="Client version"),
+    request: RegistrationRequest = Body(...),
 ):
     """Register an Ollama client."""
-    await ollama.register_client(client_id, version)
-    return {"status": "success"}
+    registration_id = await ollama.register_client(client_id, version, request.hardware)
+    return {"status": "success", "registration_id": registration_id}
 
 
 @router.post("/sync")

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -9,6 +10,7 @@ import aiohttp
 from fastapi import HTTPException, WebSocket
 
 from app.core.config import settings
+from app.models.hardware import HardwareInfo
 from app.models.ollama import OllamaModel, OllamaResponse
 
 # Store connected clients with their last heartbeat time and status
@@ -20,14 +22,21 @@ CLIENT_TIMEOUT_SECONDS = 60
 logger = logging.getLogger(__name__)
 
 
-async def register_client(client_id: str, version: str):
+async def register_client(
+    client_id: str, version: str, hardware: Optional[HardwareInfo] = None
+):
     """Register an Ollama client."""
+    registration_id = str(uuid.uuid4())
     ollama_clients[client_id] = {
         "version": version,
         "last_heartbeat": datetime.now(),
         "models": [],
         "available": False,
+        "hardware": hardware.model_dump() if hardware else {},
+        "registration_time": datetime.now(),
+        "registration_id": registration_id,
     }
+    return registration_id
 
 
 async def handle_heartbeat(
@@ -35,6 +44,7 @@ async def handle_heartbeat(
 ) -> bool:
     """Handle heartbeat from client."""
     if client_id not in ollama_clients:
+        # If client not found, register with new registration ID
         await register_client(client_id, version)
 
     client = ollama_clients[client_id]
@@ -48,18 +58,6 @@ async def handle_heartbeat(
         client["models"] = []
 
     return True
-
-
-def is_client_healthy(client_id: str) -> bool:
-    """Check if client is healthy based on last heartbeat."""
-    if client_id not in ollama_clients:
-        return False
-
-    client = ollama_clients[client_id]
-    last_heartbeat = client["last_heartbeat"]
-    time_since_heartbeat = (datetime.now() - last_heartbeat).total_seconds()
-
-    return time_since_heartbeat < CLIENT_TIMEOUT_SECONDS and client["available"]
 
 
 async def get_client(client_id: str) -> Optional[Dict]:
@@ -163,6 +161,18 @@ async def generate_completion(
         ) from e
 
 
+def is_client_healthy(client_id: str) -> bool:
+    """Check if client is healthy based on last heartbeat."""
+    if client_id not in ollama_clients:
+        return False
+
+    client = ollama_clients[client_id]
+    last_heartbeat = client["last_heartbeat"]
+    time_since_heartbeat = (datetime.now() - last_heartbeat).total_seconds()
+
+    return time_since_heartbeat < CLIENT_TIMEOUT_SECONDS and client["available"]
+
+
 def get_healthy_clients() -> List[Dict[str, Any]]:
     """Get all healthy clients with their status."""
     healthy_clients = []
@@ -177,6 +187,26 @@ def get_healthy_clients() -> List[Dict[str, Any]]:
             }
             healthy_clients.append(client_info)
     return healthy_clients
+
+
+async def get_active_clients() -> List[Dict[str, Any]]:
+    """Get all active Ollama clients with their capabilities."""
+    await cleanup_inactive_clients()
+
+    active_clients = []
+    for client_id, client in ollama_clients.items():
+        if client["available"]:
+            client_info = {
+                "id": client_id,
+                "version": client["version"],
+                "available": True,
+                "last_heartbeat": client["last_heartbeat"].isoformat(),
+                "models": client["models"],
+                "hardware": client.get("hardware", {}),
+            }
+            active_clients.append(client_info)
+
+    return active_clients
 
 
 def cleanup_inactive_clients():
