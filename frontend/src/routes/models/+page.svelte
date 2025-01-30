@@ -6,17 +6,49 @@
   let loading = true;
   let error: string | null = null;
 
+  const API_URL = 'http://localhost:8001/api/v1';
+  const CLIENT_ID = 'frontend-client';
+
   onMount(async () => {
     try {
-      const response = await fetch('http://localhost:8001/api/v1/models');
-      if (!response.ok) throw new Error('Failed to fetch models');
-      models = await response.json();
+      // Register client first
+      const registerResponse = await fetch(`${API_URL}/models/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          client_url: 'http://localhost:8002',
+          client_id: CLIENT_ID
+        })
+      });
+      if (!registerResponse.ok) throw new Error('Failed to register client');
+
+      // Then fetch models
+      const modelsResponse = await fetch(`${API_URL}/models?client_id=${CLIENT_ID}`);
+      if (!modelsResponse.ok) throw new Error('Failed to fetch models');
+      models = await modelsResponse.json();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load models';
     } finally {
       loading = false;
     }
   });
+
+  function formatSize(bytes: number): string {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = bytes;
+    let unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+    return `${size.toFixed(2)} ${units[unitIndex]}`;
+  }
+
+  function formatDate(timestamp: number): string {
+    return new Date(timestamp * 1000).toLocaleString();
+  }
 </script>
 
 <div class="space-y-6">
@@ -47,8 +79,8 @@
           {#each models as model}
             <TableBodyRow>
               <TableBodyCell>{model.name}</TableBodyCell>
-              <TableBodyCell>{model.size}</TableBodyCell>
-              <TableBodyCell>{new Date(model.modified).toLocaleString()}</TableBodyCell>
+              <TableBodyCell>{formatSize(model.size)}</TableBodyCell>
+              <TableBodyCell>{formatDate(model.modified)}</TableBodyCell>
               <TableBodyCell>
                 <div class="flex space-x-2">
                   <Button size="xs" color="blue">Test</Button>
