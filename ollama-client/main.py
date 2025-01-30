@@ -80,14 +80,14 @@ async def get_installed_models() -> List[OllamaModel]:
 async def register_with_server() -> bool:
     """Register this client with the OBT server."""
     try:
+        logger.info(f"Registering with OBT server as {settings.CLIENT_ID} (version {__version__})")
         async with aiohttp.ClientSession() as session:
-            params = {
-                "client_id": settings.CLIENT_ID,
-                "version": __version__,
-            }
             async with session.post(
                 f"{settings.OBT_SERVER_URL}/api/v1/models/register",
-                params=params,
+                params={
+                    "client_id": settings.CLIENT_ID,
+                    "version": __version__,
+                }
             ) as response:
                 if response.status != 200:
                     logger.error(f"Failed to register: {await response.text()}")
