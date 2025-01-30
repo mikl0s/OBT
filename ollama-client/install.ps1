@@ -115,8 +115,10 @@ Write-ColorOutput "Blue" "Activating virtual environment..."
 
 # Install Python dependencies
 Write-ColorOutput "Blue" "Installing Python dependencies..."
-python -m pip install --upgrade pip
-pip install -r (Join-Path $installDir "requirements.txt")
+$venvPip = Join-Path $PWD.Path "venv\Scripts\pip.exe"
+& $venvPip install --upgrade pip
+& $venvPip install -r (Join-Path $PWD.Path "requirements.txt")
+& $venvPip install psutil
 
 # Create .env file if it doesn't exist
 Write-ColorOutput "Blue" "Setting up .env file..."
