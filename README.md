@@ -43,21 +43,55 @@
   - Graceful handling of client disconnections
   - Cross-platform client support (Windows/Linux)
 
+- 🚄 **Performance Testing**
+  - Comprehensive benchmarking suite for model evaluation
+  - Hardware-aware testing with CPU/GPU support
+  - Detailed metrics including latency and tokens/second
+  - Batch testing capabilities for multiple models
+  - Custom prompt support for targeted testing
+
 - 📈 **Modern User Interface**
   - Dark-themed, responsive design
   - Real-time updates without page refreshes
   - Advanced search and filtering capabilities
   - Intuitive model selection and management
 
+- 🛠️ **Code Quality & Maintenance**
+  - Comprehensive linting with ESLint, Ruff, and Black
+  - Automated code formatting with Prettier and isort
+  - Pre-commit hooks for code quality assurance
+  - Exception handling improvements for better debugging
+
 ## 🚀 Getting Started
 
+### Quick Start - Client Installation
+
+#### Windows PowerShell (One-Line Install)
+```powershell
+irm https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/install.ps1 | iex
+```
+
+#### Linux/macOS (One-Line Install)
+```bash
+curl -sSL https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/install.sh | bash
+```
+
 ### Prerequisites
+
+#### Server Requirements
 - Python 3.10 or higher
 - Node.js 18 or higher
 - pnpm package manager
-- Ollama installed on at least one machine in your network
+- MongoDB 6.0 or higher
 
-### Quick Install
+#### Client Requirements
+- Python 3.10 or higher
+- Ollama installed and running
+- Internet connection for client registration
+
+### Manual Installation
+
+#### Server Setup
 
 1. Clone the repository:
    ```bash
@@ -65,39 +99,42 @@
    cd OBT
    ```
 
-2. Install backend dependencies:
+2. Install and start backend:
    ```bash
    cd backend
    python -m venv venv
    source venv/bin/activate  # or `venv\Scripts\activate` on Windows
    pip install -r requirements.txt
+   uvicorn app.main:app --reload --port 8881
    ```
 
-3. Install frontend dependencies:
+3. Install and start frontend:
    ```bash
    cd ../frontend
    pnpm install
-   ```
-
-4. Start the development servers:
-   ```bash
-   # In the backend directory
-   uvicorn app.main:app --reload --port 8881
-
-   # In the frontend directory
    pnpm dev
    ```
 
-5. Install and start the Ollama client:
+#### Client Setup (Manual)
+
+1. Navigate to client directory:
    ```bash
-   cd ../ollama-client
+   cd ollama-client
+   ```
+
+2. Create and activate virtual environment:
+   ```bash
    python -m venv venv
    source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+   ```
+
+3. Install dependencies and start client:
+   ```bash
    pip install -r requirements.txt
    python main.py
    ```
 
-6. Open your browser and navigate to `http://localhost:5173`
+4. Open your browser and navigate to `http://localhost:5173`
 
 ### Environment Variables
 

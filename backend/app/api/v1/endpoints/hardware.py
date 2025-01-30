@@ -1,6 +1,5 @@
 """Hardware information endpoints."""
 
-
 from fastapi import APIRouter, HTTPException
 
 from app.models.hardware import HardwareConfig

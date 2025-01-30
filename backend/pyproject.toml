@@ -49,7 +49,7 @@ line_length = 88
 line-length = 88
 target-version = "py310"
 select = ["E", "F", "B", "I"]
-ignore = []
+ignore = ["B008"]  # Ignore function calls in argument defaults (needed for FastAPI)
 
 [tool.mypy]
 python_version = "3.10"
