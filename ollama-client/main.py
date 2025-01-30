@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 import dateutil.parser
 
 import aiohttp
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 __version__ = "0.1.0"
@@ -24,13 +24,15 @@ logger.info(f"Starting Ollama Client v{__version__}")
 
 class Settings(BaseSettings):
     """Application settings."""
-    OBT_SERVER_URL: str = "http://localhost:8881"
-    OLLAMA_URL: str = "http://localhost:11434"
-    CLIENT_ID: str = "default-client"
-    HEARTBEAT_INTERVAL: int = 10  # seconds
+    OBT_SERVER_URL: str = Field(default="http://localhost:8881")
+    OLLAMA_URL: str = Field(default="http://localhost:11434")
+    CLIENT_ID: str = Field(default="default-client")
+    HEARTBEAT_INTERVAL: int = Field(default=10)  # seconds
     
     class Config:
         env_file = ".env"
+        # Allow extra fields in .env to support legacy configs
+        extra = "ignore"
 
 settings = Settings()
 
