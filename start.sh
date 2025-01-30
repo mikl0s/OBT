@@ -18,18 +18,18 @@ cleanup_mongodb() {
         sleep 2
     fi
 
-    # Check for Docker MongoDB
-    if docker ps | grep -q mongo; then
-        echo -e "${BLUE}Stopping Docker MongoDB containers...${NC}"
-        docker ps | grep mongo | awk '{print $1}' | xargs -r docker stop
+    # Check for Podman MongoDB
+    if podman ps | grep -q mongo; then
+        echo -e "${BLUE}Stopping Podman MongoDB containers...${NC}"
+        podman ps | grep mongo | awk '{print $1}' | xargs -r podman stop
         sleep 2
     fi
 
     # Remove our specific container if it exists
-    if docker ps -a | grep -q obt-mongodb; then
+    if podman ps -a | grep -q obt-mongodb; then
         echo -e "${BLUE}Removing existing MongoDB container...${NC}"
-        docker stop obt-mongodb 2>/dev/null
-        docker rm obt-mongodb
+        podman stop obt-mongodb 2>/dev/null
+        podman rm obt-mongodb
     fi
 
     # Double check the port
@@ -42,9 +42,9 @@ cleanup_mongodb() {
 
 echo -e "${BLUE}Starting OBT Services...${NC}"
 
-# Check if Docker is running
-if ! docker info > /dev/null 2>&1; then
-    echo -e "${RED}Docker is not running. Please start Docker first.${NC}"
+# Check if Podman is available
+if ! command -v podman >/dev/null 2>&1; then
+    echo -e "${RED}Podman is not installed. Please install podman first.${NC}"
     exit 1
 fi
 
@@ -65,7 +65,7 @@ fi
 
 # Start MongoDB container
 echo -e "${BLUE}Creating MongoDB container...${NC}"
-if ! docker run -d \
+if ! podman run -d \
     --name obt-mongodb \
     -p 27017:27017 \
     -e MONGO_INITDB_ROOT_USERNAME=obt_user \
@@ -73,7 +73,7 @@ if ! docker run -d \
     -e MONGO_INITDB_DATABASE=obt_db \
     mongo:latest; then
     echo -e "${RED}Failed to start MongoDB container${NC}"
-    docker logs obt-mongodb
+    podman logs obt-mongodb
     exit 1
 fi
 
@@ -81,19 +81,19 @@ fi
 echo -e "${BLUE}Waiting for MongoDB to be ready...${NC}"
 MAX_RETRIES=30
 RETRY_COUNT=0
-while ! docker exec obt-mongodb mongosh --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; do
+while ! podman exec obt-mongodb mongosh --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; do
     sleep 1
     RETRY_COUNT=$((RETRY_COUNT + 1))
     if [ $((RETRY_COUNT % 5)) -eq 0 ]; then
         echo -e "${BLUE}Still waiting for MongoDB (attempt $RETRY_COUNT/$MAX_RETRIES)...${NC}"
-        docker logs --tail 5 obt-mongodb
+        podman logs --tail 5 obt-mongodb
     fi
     if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
         echo -e "${RED}MongoDB failed to start after $MAX_RETRIES seconds${NC}"
         echo -e "${RED}Last few lines of MongoDB logs:${NC}"
-        docker logs --tail 20 obt-mongodb
-        docker stop obt-mongodb
-        docker rm obt-mongodb
+        podman logs --tail 20 obt-mongodb
+        podman stop obt-mongodb
+        podman rm obt-mongodb
         exit 1
     fi
 done
@@ -105,41 +105,37 @@ cd "${ROOT_DIR}/backend" || exit 1
 source venv/bin/activate
 
 # Install python3-distutils if missing
-if ! python3 -c "import distutils" 2>/dev/null; then
+if ! python3 -c "import distutils" > /dev/null 2>&1; then
     echo -e "${BLUE}Installing python3-distutils...${NC}"
     sudo apt-get update && sudo apt-get install -y python3-distutils
 fi
 
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8881 &
+# Start the backend server
+python3 main.py &
 BACKEND_PID=$!
 
 # Start frontend
-echo -e "${BLUE}Starting dashboard frontend...${NC}"
+echo -e "${BLUE}Starting frontend server...${NC}"
 cd "${ROOT_DIR}/frontend" || exit 1
-pnpm run dev -- --host &
+npm run dev &
 FRONTEND_PID=$!
 
-# Handle cleanup on script exit
+# Function to cleanup processes
 cleanup() {
-    echo -e "${BLUE}Shutting down services...${NC}"
+    echo -e "${BLUE}Cleaning up...${NC}"
     kill $BACKEND_PID 2>/dev/null
     kill $FRONTEND_PID 2>/dev/null
-    if docker ps | grep -q obt-mongodb; then
-        echo -e "${BLUE}Stopping MongoDB container...${NC}"
-        docker stop obt-mongodb
-        docker rm obt-mongodb
-    fi
-    echo -e "${GREEN}Services stopped${NC}"
+    cleanup_mongodb
 }
 
 trap cleanup EXIT
 
 # Keep script running and show status
 echo -e "${GREEN}All services are running!${NC}"
-echo -e "${BLUE}Dashboard: ${GREEN}http://localhost:5173${NC}"
-echo -e "${BLUE}Backend:   ${GREEN}http://localhost:8881${NC}"
-echo -e "${BLUE}API Docs:  ${GREEN}http://localhost:8881/api/v1/docs${NC}"
+echo -e "Frontend: http://localhost:5173"
+echo -e "Backend:  http://localhost:8881"
+echo -e "MongoDB:  mongodb://localhost:27017"
 echo -e "${BLUE}Press Ctrl+C to stop all services${NC}"
 
-# Wait for user interrupt
-wait
+# Wait for any process to exit
+wait -n
