@@ -118,16 +118,19 @@ async def send_heartbeat() -> bool:
         ollama_available = await check_ollama_connection()
         models = await get_installed_models() if ollama_available else []
         
+        # Convert models to dict and handle Pydantic deprecation
+        models_data = [model.model_dump() for model in models]
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{settings.OBT_SERVER_URL}/api/v1/models/heartbeat",
                 params={
                     "client_id": settings.CLIENT_ID,
                     "version": __version__,
-                    "available": str(ollama_available).lower(),  # Convert to string for query param
+                    "available": str(ollama_available).lower(),
                 },
                 json={
-                    "models": [model.model_dump() for model in models]  # Use model_dump() instead of dict()
+                    "models": models_data
                 }
             ) as response:
                 if response.status != 200:

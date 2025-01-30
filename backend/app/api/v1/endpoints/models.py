@@ -1,13 +1,18 @@
 """Models endpoints."""
 
 from typing import List, Dict
+from pydantic import BaseModel
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, Query
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, Query, Body
 
 from app.models.ollama import OllamaModel, OllamaResponse
 from app.services import ollama
 
 router = APIRouter()
+
+class HeartbeatRequest(BaseModel):
+    """Heartbeat request body."""
+    models: List[Dict]
 
 @router.post("/register")
 async def register_client(
@@ -28,10 +33,11 @@ async def client_heartbeat(
     client_id: str = Query(..., description="Client identifier"),
     version: str = Query(..., description="Client version"),
     available: bool = Query(..., description="Whether Ollama is available"),
-    models: List[Dict] = None,
+    request: HeartbeatRequest = Body(None)
 ):
     """Update client heartbeat status."""
-    await ollama.update_client_status(client_id, version, available, models or [])
+    models = request.models if request else []
+    await ollama.update_client_status(client_id, version, available, models)
     return {"status": "success"}
 
 @router.get("/", response_model=List[OllamaModel])
