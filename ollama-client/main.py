@@ -11,7 +11,7 @@ import psutil
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
-__version__ = "0.1.0"
+__version__ = "0.3.2"
 
 # Configure logging
 logging.basicConfig(

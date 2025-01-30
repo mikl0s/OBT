@@ -117,7 +117,8 @@ if (-not (Test-Path $envFile)) {
 # Create desktop shortcut
 $WshShell = New-Object -comObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\OBT Client.lnk")
-$Shortcut.TargetPath = Join-Path $installPath "start.ps1"
+$Shortcut.TargetPath = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+$Shortcut.Arguments = "-NoExit -ExecutionPolicy Bypass -File `"$installPath\start.ps1`""
 $Shortcut.WorkingDirectory = $installPath
 $Shortcut.Save()
 
