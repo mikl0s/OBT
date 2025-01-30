@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/insta
 
 **Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/install.ps1 | iex
+[System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/install.ps1'))
 ```
 
 ### Prerequisites

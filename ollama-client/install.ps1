@@ -35,7 +35,10 @@ function Get-GitHubFile {
     Write-ColorOutput "Blue" "Downloading $FileName from GitHub..."
     $url = "https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/$FileName"
     try {
-        Invoke-WebRequest -Uri $url -OutFile $TargetPath
+        $webClient = New-Object System.Net.WebClient
+        $webClient.Headers.Add("Cache-Control", "no-cache")
+        $webClient.Headers.Add("Pragma", "no-cache")
+        $webClient.DownloadFile($url, $TargetPath)
         if (-not (Test-Path $TargetPath)) {
             throw "Failed to download $FileName"
         }
@@ -43,6 +46,11 @@ function Get-GitHubFile {
     catch {
         Write-ColorOutput "Red" "Error downloading $FileName from GitHub: $_"
         exit 1
+    }
+    finally {
+        if ($webClient) {
+            $webClient.Dispose()
+        }
     }
 }
 
