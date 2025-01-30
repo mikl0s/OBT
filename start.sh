@@ -119,8 +119,12 @@ if [ ! -f "app/main.py" ]; then
     exit 1
 fi
 
+# Add backend directory to PYTHONPATH
+export PYTHONPATH="${ROOT_DIR}/backend:${PYTHONPATH:-}"
+
 # Start the backend server
-python3 app/main.py &
+cd "${ROOT_DIR}/backend" || exit 1
+python3 -m app.main &
 BACKEND_PID=$!
 
 # Wait a moment to check if backend started successfully
