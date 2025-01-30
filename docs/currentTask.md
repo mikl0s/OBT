@@ -20,12 +20,21 @@
 - Implemented pre-commit hooks for code quality
 - Updated linting configurations for frontend and backend
 - Fixed exception handling and code style issues
+- Fixed backend server import errors related to hardware models
+- Implemented client registration tracking with unique UUIDs
+- Separated hardware info collection from heartbeat mechanism
+- Added client registration time tracking
+- Updated frontend to handle hardware info correctly
+- Improved error handling in client-server communication
 
 ## Current Objectives
 - Set up frontend framework with SvelteKit
 - Create initial UI components
 - Implement model selection interface
 - Add prompt selection functionality
+- Tag release v0.3.2 with latest improvements
+- Document all changes in release notes
+- Ensure all tests pass with new registration system
 
 ## Next Steps
 1. Frontend Development
@@ -45,6 +54,11 @@
    - Create integration tests for API endpoints
    - Set up end-to-end testing with Playwright
 
+4. Test the new client registration system thoroughly
+5. Update client documentation with registration ID usage
+6. Consider adding registration ID to benchmark results
+7. Plan future improvements for client session management
+
 ## Context
 - Backend structure is in place with FastAPI
 - MongoDB is configured with Podman
@@ -58,6 +72,15 @@
 - Ensure real-time updates work smoothly
 - Keep documentation updated as we progress
 - Allow users to easily add/remove test prompts
+
+## Technical Notes
+- Client registration now includes:
+  - Unique UUID for session tracking
+  - Hardware information collection
+  - Registration timestamp
+- Heartbeat mechanism remains lightweight
+- Hardware info is stored once per registration
+- All client operations can be traced to specific registration sessions
 
 ## References
 - See `projectRoadmap.md` for overall project goals and progress

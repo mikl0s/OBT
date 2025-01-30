@@ -171,3 +171,85 @@ python-dotenv==1.0.0
 - Add authentication system
 - Implement rate limiting
 - Add request validation
+
+## Codebase Summary
+
+### Key Components
+
+#### Backend (FastAPI)
+- **API Endpoints**: REST API for client and model management
+  - `/api/v1/models`: Client registration and model management
+  - `/api/v1/hardware`: Hardware information tracking
+  - `/api/v1/benchmarks`: Benchmark execution and results
+
+- **Services**:
+  - `ollama.py`: Client registration, heartbeat, and model sync
+  - `hardware.py`: Hardware information collection and tracking
+  - `benchmarks.py`: Benchmark execution and result management
+
+- **Models**:
+  - `hardware.py`: Hardware information data models
+  - `ollama.py`: Client and model data structures
+  - `benchmarks.py`: Benchmark configuration and results
+
+#### Frontend (SvelteKit)
+- **Pages**:
+  - `/`: Dashboard overview
+  - `/models`: Model management
+  - `/tests`: Benchmark execution
+  - `/benchmark`: Test results and analysis
+
+- **Components**:
+  - Hardware information display
+  - Model selection interface
+  - Test configuration forms
+  - Result visualization
+
+#### Ollama Client
+- Hardware information collection
+- Model status reporting
+- Benchmark execution
+- Registration session management
+
+## Recent Changes
+
+### v0.3.2
+1. Client Registration Improvements
+   - Added unique UUIDs for client registration sessions
+   - Integrated hardware information collection
+   - Added registration timestamp tracking
+
+2. Hardware Information Management
+   - Separated hardware info from heartbeat
+   - Improved data model structure
+   - Added hardware info storage
+
+3. Test Session Tracking
+   - Added registration ID to test results
+   - Improved test session management
+   - Enhanced result correlation
+
+## Data Flow
+1. Client registers with server (includes hardware info)
+2. Server assigns registration UUID
+3. Client maintains heartbeat with model status
+4. Benchmark tests reference registration ID
+5. Results stored with session context
+
+## Dependencies
+- FastAPI for backend API
+- SvelteKit for frontend
+- MongoDB for data storage
+- Ollama for model execution
+
+## Recent Significant Changes
+- Implemented registration UUID system
+- Enhanced hardware information tracking
+- Improved test session management
+- Updated documentation
+
+## Next Steps
+1. Test new registration system
+2. Enhance result visualization
+3. Implement batch operations
+4. Add advanced analytics

@@ -30,6 +30,8 @@
   - Automatic discovery of Ollama clients across your network
   - Real-time client health monitoring and status tracking
   - Intelligent cleanup of inactive clients
+  - Client-side hardware detection and monitoring
+  - Unique registration IDs for tracking client sessions
 
 - 📊 **Advanced Model Organization**
   - Comprehensive model listing with size and modification tracking
@@ -40,13 +42,19 @@
 - 💾 **Client Health Monitoring**
   - Automatic client registration and discovery
   - Real-time heartbeat tracking
-  - Graceful handling of client disconnections
+  - Hardware resource monitoring (CPU, GPU, memory)
   - Cross-platform client support (Windows/Linux)
+  - Registration-based client session tracking
 
 - 🚄 **Performance Testing**
-  - Comprehensive benchmarking suite for model evaluation
-  - Hardware-aware testing with CPU/GPU support
-  - Detailed metrics including latency and tokens/second
+  - Client-side benchmark execution for accurate results
+  - Hardware-aware testing with native CPU/GPU support
+  - Test tracking by client registration session
+  - Detailed metrics including:
+    - Tokens per second
+    - Latency measurements
+    - Memory usage (RAM/VRAM)
+    - CPU/GPU utilization
   - Batch testing capabilities for multiple models
   - Custom prompt support for targeted testing
 
@@ -61,6 +69,35 @@
   - Automated code formatting with Prettier and isort
   - Pre-commit hooks for code quality assurance
   - Exception handling improvements for better debugging
+
+## 🏗️ Architecture
+
+OBT follows a distributed architecture with three main components:
+
+1. **OBT Server**
+   - Central coordination and data storage
+   - API endpoints for client and UI communication
+   - MongoDB for result storage and analysis
+   - Client registration and health tracking
+
+2. **Ollama Clients**
+   - Run on machines with Ollama installed
+   - Hardware detection and monitoring
+   - Local benchmark execution
+   - Real-time metric collection
+   - Automatic result reporting
+
+3. **Web Interface**
+   - Modern SvelteKit frontend
+   - Real-time updates via WebSocket
+   - Interactive benchmark configuration
+   - Result visualization and analysis
+
+This architecture ensures:
+- Accurate performance measurements on actual hardware
+- Scalable multi-client support
+- Real-time monitoring and updates
+- Reliable benchmark execution
 
 ## 🚀 Getting Started
 
