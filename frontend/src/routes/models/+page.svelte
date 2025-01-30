@@ -8,8 +8,9 @@
   let showClientError = false;
 
   const API_URL = 'http://localhost:8001/api/v1';
-  const CLIENT_ID = 'frontend-client';
+  // Change this to your Windows machine's IP address
   const CLIENT_URL = 'http://localhost:8002';
+  const CLIENT_ID = 'frontend-client';
 
   onMount(async () => {
     try {
@@ -74,9 +75,14 @@
     <div class="space-y-4">
       {#if showClientError}
         <Alert color="red">
-          <span class="font-medium">Ollama Client Not Running!</span>
-          <p class="mt-2">Please start the Ollama client by running:</p>
-          <pre class="mt-2 p-2 bg-gray-800 rounded">cd ollama-client && python -m uvicorn main.py:app --reload --port 8002</pre>
+          <span class="font-medium">Cannot Connect to Ollama Client!</span>
+          <p class="mt-2">Please ensure:</p>
+          <ol class="list-decimal ml-6 mt-2">
+            <li>The Ollama client is running on your Windows machine with:</li>
+            <pre class="mt-1 p-2 bg-gray-800 rounded">cd ollama-client && python -m uvicorn main.py:app --reload --port 8002 --host 0.0.0.0</pre>
+            <li class="mt-2">Update the CLIENT_URL in this file to point to your Windows machine's IP address</li>
+            <pre class="mt-1 p-2 bg-gray-800 rounded">const CLIENT_URL = 'http://YOUR_WINDOWS_IP:8002';</pre>
+          </ol>
         </Alert>
       {:else}
         <Alert color="red">
