@@ -74,10 +74,10 @@ class HardwareInfo(BaseModel):
 
     cpu_name: str = Field(..., description="CPU model name")
     cpu_threads: int = Field(..., description="Number of CPU threads")
-    total_memory: int = Field(..., description="Total system memory in bytes")
+    total_memory: int = Field(..., description="Total system memory in MB")
     gpu_count: int = Field(default=0, description="Number of GPUs")
     gpu_name: Optional[str] = Field(default=None, description="GPU model name")
-    gpu_memory: Optional[int] = Field(default=None, description="GPU memory in bytes")
+    gpu_memory: Optional[int] = Field(default=None, description="GPU memory in MB")
 
 
 class BenchmarkConfig(BaseModel):
@@ -159,9 +159,9 @@ async def get_hardware_info() -> HardwareInfo:
         cpu_name = cpu_info.get("brand_raw", "Unknown CPU")
         cpu_threads = psutil.cpu_count(logical=True)
 
-        # Get memory info
+        # Get memory info (convert bytes to MB)
         memory = psutil.virtual_memory()
-        total_memory = memory.total
+        total_memory = memory.total // (1024 * 1024)  # Convert bytes to MB
 
         # Try to get GPU info using nvidia-smi
         gpu_count = 0
@@ -176,12 +176,15 @@ async def get_hardware_info() -> HardwareInfo:
             if gpu_count > 0:
                 handle = pynvml.nvmlDeviceGetHandleByIndex(0)
                 gpu_name = pynvml.nvmlDeviceGetName(handle).decode("utf-8")
-                gpu_memory = pynvml.nvmlDeviceGetMemoryInfo(handle).total
+                # Convert bytes to MB
+                gpu_memory = pynvml.nvmlDeviceGetMemoryInfo(handle).total // (
+                    1024 * 1024
+                )
             pynvml.nvmlShutdown()
         except Exception as e:
             logger.debug(f"No NVIDIA GPU found: {e}")
 
-        return HardwareInfo(
+        hardware = HardwareInfo(
             cpu_name=cpu_name,
             cpu_threads=cpu_threads,
             total_memory=total_memory,
@@ -189,13 +192,15 @@ async def get_hardware_info() -> HardwareInfo:
             gpu_name=gpu_name,
             gpu_memory=gpu_memory,
         )
+        logger.debug(f"Collected hardware info: {hardware.model_dump_json()}")
+        return hardware
     except Exception as e:
         logger.error(f"Error getting hardware info: {e}")
         # Return minimal info to avoid registration failure
         return HardwareInfo(
             cpu_name="Unknown CPU",
             cpu_threads=1,
-            total_memory=1024 * 1024 * 1024,  # 1GB
+            total_memory=1024,  # 1GB in MB
             gpu_count=0,
         )
 
