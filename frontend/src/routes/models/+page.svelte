@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Card, Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Button, Spinner } from 'flowbite-svelte';
+  import { Card, Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell, Button, Spinner, Alert } from 'flowbite-svelte';
 
   let models: any[] = [];
   let loading = true;
   let error: string | null = null;
+  let showClientError = false;
 
   const API_URL = 'http://localhost:8001/api/v1';
   const CLIENT_ID = 'frontend-client';
@@ -13,18 +14,31 @@
   onMount(async () => {
     try {
       // Register client first
-      const registerResponse = await fetch(
-        `${API_URL}/models/register?client_url=${encodeURIComponent(CLIENT_URL)}&client_id=${encodeURIComponent(CLIENT_ID)}`,
-        { method: 'POST' }
-      );
-      if (!registerResponse.ok) throw new Error('Failed to register client');
+      const registerResponse = await fetch(`${API_URL}/models/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          client_url: CLIENT_URL,
+          client_id: CLIENT_ID
+        })
+      });
+      if (!registerResponse.ok) {
+        showClientError = true;
+        throw new Error('Failed to register client. Please make sure the Ollama client is running on port 8002.');
+      }
 
       // Then fetch models
-      const modelsResponse = await fetch(`${API_URL}/models?client_id=${encodeURIComponent(CLIENT_ID)}`);
-      if (!modelsResponse.ok) throw new Error('Failed to fetch models');
+      const modelsResponse = await fetch(`${API_URL}/models?client_id=${CLIENT_ID}`);
+      if (!modelsResponse.ok) {
+        const errorText = await modelsResponse.text();
+        throw new Error(`Failed to fetch models: ${errorText}`);
+      }
       models = await modelsResponse.json();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load models';
+      console.error('Error:', e);
     } finally {
       loading = false;
     }
@@ -57,10 +71,20 @@
       <Spinner size="12" />
     </div>
   {:else if error}
-    <Card color="red">
-      <p class="text-red-500">{error}</p>
-      <Button color="red" class="mt-4">Retry</Button>
-    </Card>
+    <div class="space-y-4">
+      {#if showClientError}
+        <Alert color="red">
+          <span class="font-medium">Ollama Client Not Running!</span>
+          <p class="mt-2">Please start the Ollama client by running:</p>
+          <pre class="mt-2 p-2 bg-gray-800 rounded">cd ollama-client && python -m uvicorn main:app --reload --port 8002</pre>
+        </Alert>
+      {:else}
+        <Alert color="red">
+          <span class="font-medium">Error Loading Models</span>
+          <p class="mt-2">{error}</p>
+        </Alert>
+      {/if}
+    </div>
   {:else}
     <Card>
       <Table>
