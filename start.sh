@@ -51,15 +51,15 @@ fi
 # Clean up MongoDB
 cleanup_mongodb
 
-# Check if port 8001 is in use
-if lsof -i :8001 > /dev/null 2>&1; then
-    echo -e "${RED}Port 8001 is already in use. Please stop any running backend server first.${NC}"
-    exit 1
-fi
-
 # Check if port 5173 is in use
 if lsof -i :5173 > /dev/null 2>&1; then
     echo -e "${RED}Port 5173 is already in use. Please stop any running frontend server first.${NC}"
+    exit 1
+fi
+
+# Check if port 8881 is in use
+if lsof -i :8881 > /dev/null 2>&1; then
+    echo -e "${RED}Port 8881 is already in use. Please stop any running backend server first.${NC}"
     exit 1
 fi
 
@@ -94,7 +94,7 @@ if ! python3 -c "import distutils" 2>/dev/null; then
     sudo apt-get update && sudo apt-get install -y python3-distutils
 fi
 
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8001 &
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8881 &
 BACKEND_PID=$!
 
 # Start frontend
@@ -121,8 +121,8 @@ trap cleanup EXIT
 # Keep script running and show status
 echo -e "${GREEN}All services are running!${NC}"
 echo -e "${BLUE}Dashboard: ${GREEN}http://localhost:5173${NC}"
-echo -e "${BLUE}Backend:   ${GREEN}http://localhost:8001${NC}"
-echo -e "${BLUE}API Docs:  ${GREEN}http://localhost:8001/api/v1/docs${NC}"
+echo -e "${BLUE}Backend:   ${GREEN}http://localhost:8881${NC}"
+echo -e "${BLUE}API Docs:  ${GREEN}http://localhost:8881/api/v1/docs${NC}"
 echo -e "${BLUE}Press Ctrl+C to stop all services${NC}"
 
 # Wait for user interrupt
