@@ -76,7 +76,7 @@
         <Alert color="red">
           <span class="font-medium">Ollama Client Not Running!</span>
           <p class="mt-2">Please start the Ollama client by running:</p>
-          <pre class="mt-2 p-2 bg-gray-800 rounded">cd ollama-client && python -m uvicorn main:app --reload --port 8002</pre>
+          <pre class="mt-2 p-2 bg-gray-800 rounded">cd ollama-client && python -m uvicorn main.py:app --reload --port 8002</pre>
         </Alert>
       {:else}
         <Alert color="red">
