@@ -71,6 +71,19 @@ class NPUInfo(BaseModel):
     dedicated: Optional[bool] = Field(None, description="Whether it's a dedicated NPU")
 
 
+class FirmwareInfo(BaseModel):
+    """System firmware and version information."""
+
+    bios_version: str = Field(..., description="BIOS/UEFI version")
+    bios_vendor: str = Field(..., description="BIOS/UEFI vendor")
+    bios_release_date: str = Field(..., description="BIOS/UEFI release date")
+    cpu_microcode: str = Field(..., description="CPU microcode version")
+    os_name: str = Field(..., description="Operating system name")
+    os_version: str = Field(..., description="Operating system version")
+    os_kernel: str = Field(..., description="Operating system kernel version")
+    ollama_version: str = Field(..., description="Ollama version")
+
+
 class HardwareInfo(BaseModel):
     """Complete system hardware information."""
 
@@ -79,6 +92,7 @@ class HardwareInfo(BaseModel):
     ram: RAMInfo = Field(..., description="RAM information")
     npu: Optional[NPUInfo] = Field(None, description="NPU information if available")
     total_memory: int = Field(..., description="Total system memory in MB")
+    firmware: FirmwareInfo = Field(..., description="System firmware and version info")
 
 
 class ClientHardwareInfo(BaseModel):

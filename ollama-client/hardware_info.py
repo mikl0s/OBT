@@ -6,6 +6,7 @@ import subprocess
 from typing import Dict, List, Optional
 
 import cpuinfo
+import distro
 import psutil
 import pynvml
 
@@ -310,6 +311,136 @@ def get_npu_info() -> Optional[Dict]:
     return None
 
 
+def get_firmware_info() -> Dict:
+    """Get firmware and version information."""
+    info = {
+        "bios_version": "Unknown",
+        "bios_vendor": "Unknown",
+        "bios_release_date": "Unknown",
+        "cpu_microcode": "Unknown",
+        "os_name": "",
+        "os_version": "",
+        "os_kernel": "",
+        "ollama_version": "Unknown",
+    }
+
+    try:
+        # Get OS info
+        if platform.system() == "Windows":
+            info["os_name"] = "Windows"
+            info["os_version"] = platform.version()
+            info["os_kernel"] = platform.release()
+
+            # Get BIOS info using wmic
+            proc = subprocess.run(
+                [
+                    "wmic",
+                    "bios",
+                    "get",
+                    "SMBIOSBIOSVersion,Manufacturer,ReleaseDate",
+                    "/format:csv",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode == 0:
+                lines = [
+                    line.strip() for line in proc.stdout.split("\n") if line.strip()
+                ]
+                if len(lines) > 1:  # Skip header
+                    _, version, vendor, date = lines[1].split(",")
+                    info["bios_version"] = version
+                    info["bios_vendor"] = vendor
+                    info["bios_release_date"] = date
+        else:
+            # Get Linux distribution info
+            info["os_name"] = distro.name(pretty=True)
+            info["os_version"] = distro.version(pretty=True)
+            info["os_kernel"] = platform.release()
+
+            # Get BIOS info using dmidecode
+            try:
+                proc = subprocess.run(
+                    ["sudo", "dmidecode", "-t", "bios"],
+                    capture_output=True,
+                    text=True,
+                )
+                if proc.returncode == 0:
+                    for line in proc.stdout.split("\n"):
+                        line = line.strip()
+                        if "Version:" in line:
+                            info["bios_version"] = line.split("Version:", 1)[1].strip()
+                        elif "Vendor:" in line:
+                            info["bios_vendor"] = line.split("Vendor:", 1)[1].strip()
+                        elif "Release Date:" in line:
+                            info["bios_release_date"] = line.split("Release Date:", 1)[
+                                1
+                            ].strip()
+            except Exception:
+                pass
+
+        # Get CPU microcode version
+        if platform.system() == "Linux":
+            try:
+                with open("/proc/cpuinfo", "r") as f:
+                    for line in f:
+                        if "microcode" in line:
+                            info["cpu_microcode"] = line.split(":")[1].strip()
+                            break
+            except Exception:
+                pass
+        elif platform.system() == "Windows":
+            try:
+                proc = subprocess.run(
+                    [
+                        "powershell",
+                        "-Command",
+                        "Get-WmiObject -Class Win32_Processor | Select-Object -ExpandProperty Description",
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                if proc.returncode == 0:
+                    # Try to extract microcode version from CPU description
+                    match = re.search(r"Microcode Revision: (\d+)", proc.stdout)
+                    if match:
+                        info["cpu_microcode"] = match.group(1)
+            except Exception:
+                pass
+
+        # Get Ollama version
+        try:
+            proc = subprocess.run(
+                ["ollama", "--version"],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode == 0:
+                info["ollama_version"] = proc.stdout.strip()
+        except Exception:
+            # Try alternative method for Windows
+            if platform.system() == "Windows":
+                try:
+                    proc = subprocess.run(
+                        [
+                            "powershell",
+                            "-Command",
+                            "(Get-Item (Get-Command ollama).Source).VersionInfo.FileVersion",
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if proc.returncode == 0:
+                        info["ollama_version"] = proc.stdout.strip()
+                except Exception:
+                    pass
+
+    except Exception as e:
+        print(f"Error getting firmware info: {e}")
+
+    return info
+
+
 def get_hardware_info() -> Dict:
     """Get complete hardware information."""
     return {
@@ -318,4 +449,5 @@ def get_hardware_info() -> Dict:
         "ram": get_ram_info(),
         "npu": get_npu_info(),
         "total_memory": psutil.virtual_memory().total // (1024 * 1024),  # Convert to MB
+        "firmware": get_firmware_info(),
     }
