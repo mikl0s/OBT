@@ -2,27 +2,43 @@
 	import { onMount } from 'svelte';
 	import { benchmarkStore } from '$lib/stores/benchmark';
 	import PromptModal from '$lib/components/PromptModal.svelte';
-	import type { Client, Prompt } from '$lib/types/benchmark';
+	import type { Prompt, ClientData } from '$lib/types/benchmark';
 
 	// State
 	let selectedClient = '';
-	let selectedClientData: Client | null = null;
+	let selectedClientData: ClientData | null = null;
+	let isDropdownOpen = false;
+	let clientPollInterval: ReturnType<typeof setInterval>;
 	let promptModalVisible = false;
 	let selectedPrompt: Prompt | null = null;
 
 	// Initialize stores
 	$: clients = $benchmarkStore.clients;
 	$: testPrompts = $benchmarkStore.prompts;
+	$: models = $benchmarkStore.models;
+	$: selectedModels = $benchmarkStore.selectedModels;
 
 	// Handle client selection
 	function handleClientChange(): void {
-		if (!selectedClient) {
-			selectedClientData = null;
-			return;
-		}
-
-		// Find client data
 		selectedClientData = clients.find((c) => c.id === selectedClient) || null;
+	}
+
+	// Handle dropdown open/close
+	function handleDropdownOpen() {
+		isDropdownOpen = true;
+		// Fetch clients immediately when opening dropdown
+		benchmarkStore.getClients();
+		// Start polling while dropdown is open
+		clientPollInterval = setInterval(() => {
+			benchmarkStore.getClients();
+		}, 5000);
+	}
+
+	function handleDropdownClose() {
+		isDropdownOpen = false;
+		if (clientPollInterval) {
+			clearInterval(clientPollInterval);
+		}
 	}
 
 	// Handle prompt view
@@ -33,7 +49,10 @@
 
 	// Check if benchmark can start
 	$: canStartBenchmark =
-		selectedClient && selectedClientData?.models?.length > 0 && testPrompts.some((p) => p.selected);
+		selectedClient &&
+		selectedClientData?.models?.length > 0 &&
+		testPrompts.some((p) => p.selected) &&
+		selectedModels.length > 0;
 
 	// Start benchmark
 	async function startBenchmark(): Promise<void> {
@@ -49,7 +68,8 @@
 			await benchmarkStore.startBenchmark({
 				client_id: selectedClient,
 				prompts: selectedPrompts.map((p) => p.content),
-				hardware: selectedClientData?.hardware
+				hardware: selectedClientData?.hardware,
+				models: selectedModels
 			});
 		} catch (error) {
 			console.error('Failed to start benchmark:', error);
@@ -57,57 +77,89 @@
 	}
 
 	onMount(async () => {
-		await benchmarkStore.fetchClients();
+		try {
+			await Promise.all([
+				benchmarkStore.getClients(),
+				benchmarkStore.getPrompts(),
+				benchmarkStore.getModels()
+			]);
+		} catch (error) {
+			console.error('Failed to initialize benchmark data:', error);
+		}
 	});
 </script>
 
-<div class="space-y-6 p-6">
+<div class="grid grid-cols-4 gap-6 p-6">
 	<!-- Client Selection -->
-	<div class="space-y-4">
+	<div class="col-span-4 space-y-4">
 		<h2 class="text-xl font-semibold">Client Selection</h2>
-		<div class="form-control">
-			<label for="client-select" class="label">
-				<span class="label-text">Select Client</span>
-			</label>
-			<select
-				id="client-select"
-				bind:value={selectedClient}
-				on:change={handleClientChange}
-				class="select select-bordered w-full"
-			>
-				<option value="">Select a client</option>
-				{#each clients as client}
-					<option value={client.id}>{client.id}</option>
-				{/each}
-			</select>
-		</div>
+		<select
+			bind:value={selectedClient}
+			on:change={handleClientChange}
+			on:focus={handleDropdownOpen}
+			on:blur={handleDropdownClose}
+			class="w-full rounded border border-purple-700 bg-gray-800 p-2 text-gray-100 focus:border-purple-500 focus:ring-2 focus:ring-purple-500"
+			aria-expanded={isDropdownOpen}
+		>
+			<option value="">Select Client</option>
+			{#each clients as client}
+				<option value={client.id}>
+					{client.id} - {client.hardware?.gpu_name || 'CPU Only'}
+				</option>
+			{/each}
+		</select>
+
+		{#if selectedClientData}
+			<div class="space-y-4 rounded bg-gray-800 p-4">
+				<h3 class="font-medium">Client Details</h3>
+				<div class="grid grid-cols-2 gap-4 text-sm">
+					<div>
+						<span class="text-gray-400">Version:</span>
+						<span class="ml-2">{selectedClientData.version}</span>
+					</div>
+					<div>
+						<span class="text-gray-400">Models:</span>
+						<span class="ml-2">{selectedClientData.model_count}</span>
+					</div>
+					<div>
+						<span class="text-gray-400">CPU Threads:</span>
+						<span class="ml-2">{selectedClientData.hardware?.cpu_threads || 'N/A'}</span>
+					</div>
+					{#if selectedClientData.hardware?.gpu_name}
+						<div>
+							<span class="text-gray-400">GPU:</span>
+							<span class="ml-2">{selectedClientData.hardware.gpu_name}</span>
+						</div>
+						<div>
+							<span class="text-gray-400">GPU Memory:</span>
+							<span class="ml-2">{selectedClientData.hardware.gpu_memory}GB</span>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Model Selection -->
+				<div class="space-y-2">
+					<h3 class="font-medium">Available Models</h3>
+					<div class="grid grid-cols-2 gap-4">
+						{#each models.filter((m) => m.client_id === selectedClient) as model}
+							<label class="flex items-center space-x-2 rounded bg-gray-800 p-2 hover:bg-gray-700">
+								<input
+									type="checkbox"
+									bind:group={selectedModels}
+									value={model.name}
+									class="form-checkbox rounded text-purple-500 focus:ring-purple-500"
+								/>
+								<span>{model.name}</span>
+							</label>
+						{/each}
+					</div>
+				</div>
+			</div>
+		{/if}
 	</div>
 
-	<!-- Hardware Info -->
-	{#if selectedClientData?.hardware}
-		<div class="space-y-4">
-			<h2 class="text-xl font-semibold">Hardware Configuration</h2>
-			<div class="grid grid-cols-2 gap-4">
-				{#each [{ id: 'cpu', label: 'CPU', key: 'cpu_name' }, { id: 'cpu-threads', label: 'CPU Threads', key: 'cpu_threads' }, { id: 'memory', label: 'Memory (MB)', key: 'total_memory' }, { id: 'gpu', label: 'GPU', key: 'gpu_name' }] as control}
-					<div class="form-control">
-						<label for={control.id} class="label">
-							<span class="label-text">{control.label}</span>
-						</label>
-						<input
-							id={control.id}
-							type="text"
-							class="input input-bordered"
-							value={selectedClientData.hardware[control.key] || 'N/A'}
-							disabled
-						/>
-					</div>
-				{/each}
-			</div>
-		</div>
-	{/if}
-
 	<!-- Test Prompts -->
-	<div class="space-y-4">
+	<div class="col-span-4 space-y-4">
 		<h2 class="text-xl font-semibold">Test Prompts</h2>
 		<div class="space-y-2">
 			{#each testPrompts as prompt}
@@ -161,7 +213,7 @@
 </div>
 
 <!-- Prompt Modal -->
-{#if promptModalVisible}
+{#if promptModalVisible && selectedPrompt}
 	<PromptModal
 		prompt={selectedPrompt}
 		on:close={() => {

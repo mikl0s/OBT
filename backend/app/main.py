@@ -15,15 +15,18 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    docs_url=f"{settings.API_V1_PREFIX}/docs",
-    redoc_url=f"{settings.API_V1_PREFIX}/redoc",
     openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
 )
 
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Configure for production
+    allow_origins=[
+        "http://localhost:5173",  # SvelteKit dev server
+        "http://localhost:8881",  # Backend server
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8881",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

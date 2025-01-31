@@ -18,7 +18,8 @@ module.exports = {
 			},
 			rules: {
 				'@typescript-eslint/no-unused-vars': ['warn', { varsIgnorePattern: '^\\$\\$' }],
-				'svelte/no-at-html-tags': 'error',
+				// Disable no-at-html-tags since we use DOMPurify for sanitization
+				'svelte/no-at-html-tags': 'off',
 				'svelte/valid-compile': 'error'
 			}
 		}

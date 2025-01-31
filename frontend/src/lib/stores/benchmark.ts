@@ -1,5 +1,7 @@
 import { writable } from 'svelte/store';
 
+const API_URL = 'http://localhost:8881/api/v1';
+
 export interface Client {
 	id: string;
 	version: string;
@@ -16,10 +18,9 @@ export interface Client {
 
 export interface Model {
 	name: string;
+	client_id: string;
 	size: number;
 	digest: string;
-	modified_at: number;
-	client_id: string;
 }
 
 export interface Prompt {
@@ -49,12 +50,11 @@ export interface TestConfig {
 
 interface BenchmarkState {
 	clients: Client[];
-	selectedClients: Set<string>;
+	selectedClients: string[];
 	models: Model[];
-	filteredModels: Model[];
-	selectedModels: Set<string>;
+	selectedModels: string[];
 	prompts: Prompt[];
-	selectedPrompts: Set<string>;
+	selectedPrompts: string[];
 	availableGPUs: GPU[];
 	hardwareConfig: HardwareConfig;
 	testConfig: TestConfig;
@@ -64,16 +64,21 @@ interface BenchmarkState {
 	loading: boolean;
 	error: string | null;
 	activeTests: Map<string, string>;
+	activeBenchmarks: Array<{
+		client_id: string;
+		status: string;
+		completed_prompts: number;
+		total_prompts: number;
+	}>;
 }
 
 const initialState: BenchmarkState = {
 	clients: [],
-	selectedClients: new Set(),
+	selectedClients: [],
 	models: [],
-	filteredModels: [],
-	selectedModels: new Set(),
+	selectedModels: [],
 	prompts: [],
-	selectedPrompts: new Set(),
+	selectedPrompts: [],
 	availableGPUs: [],
 	hardwareConfig: {
 		client_id: '',
@@ -90,7 +95,8 @@ const initialState: BenchmarkState = {
 	sortDirection: 'asc',
 	loading: true,
 	error: null,
-	activeTests: new Map()
+	activeTests: new Map(),
+	activeBenchmarks: []
 };
 
 function createBenchmarkStore() {
@@ -101,38 +107,86 @@ function createBenchmarkStore() {
 		set,
 		update,
 		reset: () => set(initialState),
-		toggleClient: (clientId: string) =>
+		getClients: async () => {
+			update((state) => ({ ...state, loading: true, error: null }));
+			try {
+				const response = await fetch(`${API_URL}/models/clients`);
+				if (!response.ok) throw new Error('Failed to fetch clients');
+				const clients = await response.json();
+				update((state) => ({ ...state, clients, loading: false }));
+				return clients;
+			} catch (error) {
+				update((state) => ({ ...state, error: error.message, loading: false }));
+				return [];
+			}
+		},
+		getPrompts: async () => {
+			update((state) => ({ ...state, loading: true, error: null }));
+			try {
+				const response = await fetch(`${API_URL}/prompts/test-suites`);
+				if (!response.ok) throw new Error('Failed to fetch prompts');
+				const data = await response.json();
+				// The API returns test suites, we want to flatten all prompts from all suites
+				const prompts = data.flatMap((suite) => suite.prompts);
+				update((state) => ({ ...state, prompts, loading: false }));
+				return prompts;
+			} catch (error) {
+				update((state) => ({ ...state, error: error.message, loading: false }));
+				return [];
+			}
+		},
+		getModels: async (clientId?: string) => {
+			update((state) => ({ ...state, loading: true, error: null }));
+			try {
+				const url = clientId ? `${API_URL}/models?client_id=${clientId}` : `${API_URL}/models`;
+				const response = await fetch(url);
+				if (!response.ok) throw new Error('Failed to fetch models');
+				const models = await response.json();
+				update((state) => ({ ...state, models, loading: false }));
+				return models;
+			} catch (error) {
+				update((state) => ({ ...state, error: error.message, loading: false }));
+				return [];
+			}
+		},
+		selectModel: (modelName: string) => {
+			update((state) => ({
+				...state,
+				selectedModels: state.selectedModels.includes(modelName)
+					? state.selectedModels.filter((m) => m !== modelName)
+					: [...state.selectedModels, modelName]
+			}));
+		},
+		clearSelectedModels: () => {
+			update((state) => ({ ...state, selectedModels: [] }));
+		},
+		toggleClient: (clientId: string) => {
 			update((state) => {
-				const newSelected = new Set(state.selectedClients);
-				if (newSelected.has(clientId)) {
-					newSelected.delete(clientId);
-				} else {
-					newSelected.add(clientId);
-				}
+				const newSelected = state.selectedClients.includes(clientId)
+					? state.selectedClients.filter((c) => c !== clientId)
+					: [...state.selectedClients, clientId];
 				return { ...state, selectedClients: newSelected };
-			}),
-		setModels: (models: Model[]) =>
-			update((state) => ({ ...state, models, filteredModels: models })),
-		toggleModel: (modelName: string) =>
+			});
+		},
+		setModels: (models: Model[]) => {
+			update((state) => ({ ...state, models }));
+		},
+		toggleModel: (modelName: string) => {
+			update((state) => ({
+				...state,
+				selectedModels: state.selectedModels.includes(modelName)
+					? state.selectedModels.filter((m) => m !== modelName)
+					: [...state.selectedModels, modelName]
+			}));
+		},
+		togglePrompt: (promptId: string) => {
 			update((state) => {
-				const newSelected = new Set(state.selectedModels);
-				if (newSelected.has(modelName)) {
-					newSelected.delete(modelName);
-				} else {
-					newSelected.add(modelName);
-				}
-				return { ...state, selectedModels: newSelected };
-			}),
-		togglePrompt: (promptId: string) =>
-			update((state) => {
-				const newSelected = new Set(state.selectedPrompts);
-				if (newSelected.has(promptId)) {
-					newSelected.delete(promptId);
-				} else {
-					newSelected.add(promptId);
-				}
+				const newSelected = state.selectedPrompts.includes(promptId)
+					? state.selectedPrompts.filter((p) => p !== promptId)
+					: [...state.selectedPrompts, promptId];
 				return { ...state, selectedPrompts: newSelected };
-			}),
+			});
+		},
 		setGPUs: (gpus: GPU[]) => update((state) => ({ ...state, availableGPUs: gpus })),
 		setError: (error: string | null) => update((state) => ({ ...state, error })),
 		setLoading: (loading: boolean) => update((state) => ({ ...state, loading })),
@@ -179,7 +233,7 @@ function createBenchmarkStore() {
 					return state.sortDirection === 'asc' ? comparison : -comparison;
 				});
 
-				return { ...state, filteredModels: filtered };
+				return { ...state, models: filtered };
 			}),
 		setActiveTest: (id: string, status: string) =>
 			update((state) => {

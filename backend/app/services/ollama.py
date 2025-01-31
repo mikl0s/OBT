@@ -16,8 +16,10 @@ from app.models.ollama import OllamaModel, OllamaResponse
 # Store connected clients with their last heartbeat time and status
 ollama_clients: Dict[str, Dict] = {}
 
-# Client is considered unhealthy if no heartbeat in 60 seconds
-CLIENT_TIMEOUT_SECONDS = 60
+# Client is considered unhealthy if 3 heartbeats are missed (15 seconds)
+HEARTBEAT_INTERVAL_SECONDS = 5
+MAX_MISSED_HEARTBEATS = 3
+CLIENT_TIMEOUT_SECONDS = HEARTBEAT_INTERVAL_SECONDS * MAX_MISSED_HEARTBEATS
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,7 @@ async def register_client(
         "hardware": hardware.model_dump() if hardware else {},
         "registration_time": datetime.now(),
         "registration_id": registration_id,
+        "missed_heartbeats": 0,
     }
     return registration_id
 
@@ -51,6 +54,7 @@ async def handle_heartbeat(
     client["last_heartbeat"] = datetime.now()
     client["available"] = ollama_available
     client["version"] = version
+    client["missed_heartbeats"] = 0
 
     if ollama_available and models:
         client["models"] = await sync_models(client_id, models)
@@ -163,30 +167,55 @@ async def generate_completion(
 
 def is_client_healthy(client_id: str) -> bool:
     """Check if client is healthy based on last heartbeat."""
-    if client_id not in ollama_clients:
+    try:
+        if client_id not in ollama_clients:
+            return False
+
+        client = ollama_clients[client_id]
+        if not client.get("available", False):
+            return False
+
+        last_heartbeat = client.get("last_heartbeat")
+        if not last_heartbeat:
+            return False
+
+        time_since_heartbeat = (datetime.now() - last_heartbeat).total_seconds()
+        missed_heartbeats = client.get("missed_heartbeats", 0)
+
+        return (
+            time_since_heartbeat < CLIENT_TIMEOUT_SECONDS
+            and missed_heartbeats < MAX_MISSED_HEARTBEATS
+        )
+    except Exception as e:
+        logger.error(f"Error checking client health for {client_id}: {e}")
         return False
 
-    client = ollama_clients[client_id]
-    last_heartbeat = client["last_heartbeat"]
-    time_since_heartbeat = (datetime.now() - last_heartbeat).total_seconds()
 
-    return time_since_heartbeat < CLIENT_TIMEOUT_SECONDS and client["available"]
-
-
-def get_healthy_clients() -> List[Dict[str, Any]]:
+async def get_healthy_clients() -> List[Dict[str, Any]]:
     """Get all healthy clients with their status."""
-    healthy_clients = []
-    for client_id, client in ollama_clients.items():
-        if is_client_healthy(client_id):
-            client_info = {
-                "id": client_id,
-                "version": client["version"],
-                "available": client["available"],
-                "model_count": len(client["models"]),
-                "last_heartbeat": client["last_heartbeat"].isoformat(),
-            }
-            healthy_clients.append(client_info)
-    return healthy_clients
+    try:
+        healthy_clients = []
+        current_time = datetime.now()
+
+        for client_id, client in ollama_clients.items():
+            if is_client_healthy(client_id):
+                client_info = {
+                    "id": client_id,
+                    "version": client.get("version", "unknown"),
+                    "available": client.get("available", False),
+                    "model_count": len(client.get("models", [])),
+                    "hardware": client.get("hardware", {}),
+                    "last_heartbeat": (
+                        current_time - client["last_heartbeat"]
+                    ).total_seconds(),
+                    "missed_heartbeats": client.get("missed_heartbeats", 0),
+                }
+                healthy_clients.append(client_info)
+
+        return healthy_clients
+    except Exception as e:
+        logger.error(f"Error getting healthy clients: {e}")
+        return []
 
 
 async def get_active_clients() -> List[Dict[str, Any]]:
@@ -209,7 +238,7 @@ async def get_active_clients() -> List[Dict[str, Any]]:
     return active_clients
 
 
-def cleanup_inactive_clients():
+async def cleanup_inactive_clients():
     """Remove clients that haven't sent a heartbeat in CLIENT_TIMEOUT_SECONDS."""
     current_time = datetime.now()
     to_remove = []
@@ -217,10 +246,22 @@ def cleanup_inactive_clients():
     for client_id, client in ollama_clients.items():
         time_since_heartbeat = (current_time - client["last_heartbeat"]).total_seconds()
         if time_since_heartbeat >= CLIENT_TIMEOUT_SECONDS:
+            msg = (
+                f"Client {client_id} has not sent heartbeat in "
+                f"{time_since_heartbeat:.1f} seconds. Removing from active clients."
+            )
+            logger.warning(msg)
             to_remove.append(client_id)
+        else:
+            missed_heartbeats = int(time_since_heartbeat // HEARTBEAT_INTERVAL_SECONDS)
+            client["missed_heartbeats"] = missed_heartbeats
+            if missed_heartbeats > 0:
+                remaining = MAX_MISSED_HEARTBEATS - missed_heartbeats
+                msg = (
+                    f"Client {client_id} has missed {missed_heartbeats} heartbeats. "
+                    f"Will be removed after {remaining} more misses."
+                )
+                logger.info(msg)
 
     for client_id in to_remove:
-        logger.info(f"Removing inactive client: {client_id}")
         del ollama_clients[client_id]
-
-    return to_remove

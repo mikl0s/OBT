@@ -1,5 +1,6 @@
 """Models endpoints."""
 
+import logging
 from typing import Dict, List
 
 from fastapi import APIRouter, Body, HTTPException, Query, WebSocket
@@ -8,6 +9,8 @@ from pydantic import BaseModel
 from app.models.hardware import HardwareInfo
 from app.models.ollama import OllamaModel
 from app.services import ollama
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -56,24 +59,56 @@ async def client_heartbeat(
     request: HeartbeatRequest = Body(None),
 ):
     """Update client heartbeat status."""
-    models = request.models if request else []
-    await ollama.update_client_status(client_id, version, available, models)
-    return {"status": "success"}
+    try:
+        models = request.models if request else []
+        await ollama.update_client_status(client_id, version, available, models)
+
+        # Run cleanup after each heartbeat to quickly detect inactive clients
+        await ollama.cleanup_inactive_clients()
+
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/", response_model=List[OllamaModel])
-async def list_models(client_id: str):
+async def list_models(client_id: str = Query(..., description="Client identifier")):
     """List all installed models."""
     try:
-        return await ollama.get_installed_models(client_id)
+        if not client_id:
+            raise HTTPException(status_code=422, detail="client_id is required")
+
+        if not await ollama.is_client_healthy(client_id):
+            raise HTTPException(
+                status_code=404, detail=f"Client {client_id} not found or not healthy"
+            )
+
+        models = await ollama.get_installed_models(client_id)
+        if not models:
+            logger.warning(f"No models found for client {client_id}")
+        return models
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Failed to list models for client {client_id}: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list models: {str(e)}"
+        ) from e
 
 
 @router.get("/clients")
 async def list_clients():
     """List all healthy Ollama clients."""
-    return ollama.get_healthy_clients()
+    try:
+        clients = await ollama.get_healthy_clients()
+        if not clients:
+            logger.warning("No healthy clients found")
+        return clients
+    except Exception as e:
+        logger.error(f"Failed to list clients: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list clients: {str(e)}"
+        ) from e
 
 
 @router.websocket("/generate/{model_name}")

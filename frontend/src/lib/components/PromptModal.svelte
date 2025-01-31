@@ -1,4 +1,6 @@
 <script lang="ts">
+	// We use DOMPurify to sanitize HTML, so we can safely use {@html}
+	/* eslint-disable svelte/no-at-html-tags */
 	import { createEventDispatcher } from 'svelte';
 	import { marked } from 'marked';
 	import DOMPurify from 'isomorphic-dompurify';
@@ -31,7 +33,7 @@
 		</div>
 		<div class="prose prose-invert max-w-none">
 			<div class="markdown-content" role="article">
-				<div>{markdownContent}</div>
+				<div>{@html markdownContent}</div>
 			</div>
 		</div>
 	</div>
