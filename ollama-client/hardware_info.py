@@ -1,10 +1,10 @@
 """Hardware information collection module."""
 
-import datetime
 import platform
 import re
 import subprocess
 import winreg
+from datetime import datetime
 from typing import Dict, List, Optional
 
 import cpuinfo
@@ -88,14 +88,11 @@ def get_ram_info() -> Dict:
             total_memory = 0
             ram_type = "Unknown"
             speed = 0
-            channels = 1
-
-            # Get physical memory arrays to determine channels
-            for mem_array in w.Win32_PhysicalMemoryArray():
-                channels = mem_array.MemoryDevices if mem_array.MemoryDevices else 1
+            channels = 1  # Default to single channel
 
             # Get memory modules
             modules = []
+            module_locations = set()
             for mem in w.Win32_PhysicalMemory():
                 total_memory += int(mem.Capacity) if mem.Capacity else 0
                 if mem.Speed:
@@ -107,6 +104,11 @@ def get_ram_info() -> Dict:
                     # DDR5 is type 30
                     elif mem.SMBIOSMemoryType == 30:
                         ram_type = "DDR5"
+
+                # Track unique bank locations to determine channel configuration
+                if mem.BankLabel:
+                    module_locations.add(mem.BankLabel)
+
                 modules.append(
                     {
                         "capacity": (
@@ -121,6 +123,11 @@ def get_ram_info() -> Dict:
                         ),
                     }
                 )
+
+            # Determine channel configuration based on populated slots
+            # Most modern systems use dual-channel when 2 identical DIMMs are installed
+            if len(modules) >= 2 and modules[0]["capacity"] == modules[1]["capacity"]:
+                channels = 2  # Dual channel
 
             return {
                 "total": total_memory // (1024 * 1024),  # Convert to MB
@@ -191,7 +198,10 @@ def get_gpus_info() -> List[Dict]:
             for i in range(device_count):
                 handle = pynvml.nvmlDeviceGetHandleByIndex(i)
                 info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                name = pynvml.nvmlDeviceGetName(handle).decode("utf-8")
+                # Some versions return bytes, others return string
+                name = pynvml.nvmlDeviceGetName(handle)
+                if isinstance(name, bytes):
+                    name = name.decode("utf-8")
 
                 # Get PCIe info
                 pcie_info = pynvml.nvmlDeviceGetMaxPcieLinkGeneration(handle)
@@ -207,7 +217,9 @@ def get_gpus_info() -> List[Dict]:
 
                 gpu = {
                     "name": name,
-                    "vram_size": info.total // (1024 * 1024),  # Convert to MB
+                    "vram_size": round(
+                        info.total / (1024 * 1024 * 1024), 2
+                    ),  # Convert to GB with 2 decimal places
                     "vram_type": (
                         "GDDR6X" if "RTX" in name else "GDDR6"
                     ),  # Assumption based on RTX series
@@ -240,17 +252,49 @@ def get_gpus_info() -> List[Dict]:
 
             w = wmi.WMI()
             for gpu in w.Win32_VideoController():
-                if gpu.AdapterRAM:  # Only include GPUs with memory
+                # Get VRAM size - try different properties as some might be unavailable
+                vram_size = None
+                if hasattr(gpu, "AdapterRAM") and gpu.AdapterRAM:
+                    vram_size = gpu.AdapterRAM
+
+                if vram_size is not None:
                     gpus.append(
                         {
                             "name": gpu.Name,
-                            "vram_size": gpu.AdapterRAM
-                            // (1024 * 1024),  # Convert to MB
+                            "vram_size": round(
+                                vram_size / (1024 * 1024 * 1024), 2
+                            ),  # Convert to GB with 2 decimal places
                             "vram_type": "GDDR6X" if "RTX" in gpu.Name else "GDDR6",
                             "pcie_generation": "PCIe 4.0",  # Default for modern GPUs
                             "pcie_width": "x16",
                         }
                     )
+                else:
+                    print(f"Could not determine VRAM size for {gpu.Name}")
+                    # Try to get VRAM from name (e.g., "NVIDIA GeForce RTX 4070 SUPER 12GB")
+                    vram_match = re.search(r"(\d+)\s*GB", gpu.Name)
+                    if vram_match:
+                        vram_gb = int(vram_match.group(1))
+                        gpus.append(
+                            {
+                                "name": gpu.Name,
+                                "vram_size": vram_gb,
+                                "vram_type": "GDDR6X" if "RTX" in gpu.Name else "GDDR6",
+                                "pcie_generation": "PCIe 4.0",
+                                "pcie_width": "x16",
+                            }
+                        )
+                    else:
+                        # Add GPU without VRAM info
+                        gpus.append(
+                            {
+                                "name": gpu.Name,
+                                "vram_size": None,
+                                "vram_type": "GDDR6X" if "RTX" in gpu.Name else "GDDR6",
+                                "pcie_generation": "PCIe 4.0",
+                                "pcie_width": "x16",
+                            }
+                        )
         except Exception as e:
             print(f"Error getting GPU info through WMI: {e}")
 
@@ -319,15 +363,22 @@ def get_firmware_info() -> Dict:
                 info["bios_vendor"] = (
                     bios.Manufacturer if bios.Manufacturer else "Unknown"
                 )
-                info["bios_version"] = bios.Version if bios.Version else "Unknown"
+                # Try to extract the short version (like A.Q1) from the full version string
+                version = bios.Version if bios.Version else "Unknown"
+                if version != "Unknown":
+                    # Try to find version in format X.XX or X.X
+                    version_match = re.search(r"[A-Z]\.[A-Z0-9]+", version)
+                    if version_match:
+                        version = version_match.group(0)
+                info["bios_version"] = version
+
                 if bios.ReleaseDate:
                     try:
-                        # Convert WMI datetime to ISO format
-                        date = datetime.strptime(
-                            bios.ReleaseDate.split(".")[0], "%Y%m%d%H%M%S"
-                        )
-                        info["bios_release_date"] = date.isoformat()
-                    except ValueError:
+                        # Convert WMI datetime format (YYYYMMDDHHMMSS.MMMMMM+UUU) to ISO
+                        date_str = bios.ReleaseDate.split(".")
+                        date = datetime.strptime(date_str[0], "%Y%m%d%H%M%S")
+                        info["bios_release_date"] = date.strftime("%Y-%m-%d")
+                    except (ValueError, AttributeError):
                         info["bios_release_date"] = bios.ReleaseDate
 
             # Get baseboard info for additional details
@@ -336,6 +387,11 @@ def get_firmware_info() -> Dict:
                     info["bios_vendor"] = (
                         board.Manufacturer if board.Manufacturer else "Unknown"
                     )
+                    # Try to get version from product name if BIOS version is still unknown
+                    if info["bios_version"] == "Unknown" and board.Product:
+                        version_match = re.search(r"[A-Z]\.[A-Z0-9]+", board.Product)
+                        if version_match:
+                            info["bios_version"] = version_match.group(0)
 
             # Try to get CPU microcode version
             try:
@@ -365,7 +421,7 @@ def get_firmware_info() -> Dict:
                         date_str = line.split(":")[1].strip()
                         try:
                             date = datetime.strptime(date_str, "%m/%d/%Y")
-                            info["bios_release_date"] = date.isoformat()
+                            info["bios_release_date"] = date.strftime("%Y-%m-%d")
                         except ValueError:
                             info["bios_release_date"] = date_str
 
