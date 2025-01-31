@@ -1,22 +1,24 @@
+# Core dependencies
+aiohttp>=3.9.1
 fastapi>=0.104.1
-uvicorn>=0.24.0
 pydantic>=2.5.2
 pydantic-settings>=2.1.0
-aiohttp>=3.9.1
-websockets>=12.0
-python-dotenv>=1.0.1
-python-dateutil>=2.8.2
+uvicorn>=0.24.0
 psutil>=5.9.0
 py-cpuinfo>=9.0.0
-nvidia-ml-py>=12.535.108
-torch>=2.1.0
-numpy>=1.24.0
-psutil>=5.9.0
-py-cpuinfo>=9.0.0
-python-dotenv>=1.0.0
-requests>=2.31.0
 distro>=1.8.0
 pynvml>=11.5.0
+python-dotenv>=1.0.1
+python-dateutil>=2.8.2
+numpy>=1.24.0
+requests>=2.31.0
+websockets>=12.0
+
+# Windows-specific dependencies
 wmi>=1.5.1; platform_system == "Windows"
 pywin32>=306; platform_system == "Windows"
 pefile>=2023.2.7; platform_system == "Windows"  # Optional: for additional version detection
+directml>=1.11.0; platform_system == "Windows"  # Optional: for Intel/AMD NPU detection
+
+# Linux-specific dependencies
+nvidia-ml-py>=12.535.108; platform_system == "Linux"  # For NVIDIA GPU detection

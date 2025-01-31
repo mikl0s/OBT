@@ -1,12 +1,14 @@
 """Hardware information collection module."""
 
+import ctypes
+import os
 import platform
 import re
 import shutil
 import subprocess
 import winreg
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import cpuinfo
 import psutil
@@ -302,42 +304,153 @@ def get_gpus_info() -> List[Dict]:
     return gpus
 
 
-def get_npu_info() -> Optional[Dict]:
-    """Get NPU information if available."""
-    # Check for Intel NPU
+def get_npu_info() -> Dict:
+    """Get NPU (Neural Processing Unit) information if available."""
+    info = {
+        "type": "none",
+        "name": "none",
+        "compute_capability": None,
+        "cores": None,
+        "memory": None,
+        "driver_version": None,
+        "tensor_cores": False,
+        "fp16_support": False,
+    }
+
+    system = platform.system()
+
+    # Check for NVIDIA GPU with compute capability
     try:
-        if platform.system() == "Windows":
-            result = subprocess.run(
-                ["wmic", "path", "win32_videocontroller", "get", "name", "/format:csv"],
-                capture_output=True,
-                text=True,
+        # Ensure NVML is loaded correctly on Windows
+        if system == "Windows":
+            os.add_dll_directory("C:\\Windows\\System32")
+            ctypes.WinDLL("C:\\Windows\\System32\\nvml.dll")
+
+        import pynvml
+
+        pynvml.nvmlInit()
+        device_count = pynvml.nvmlDeviceGetCount()
+        if device_count > 0:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            major, minor = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
+            info["type"] = "cuda"
+            info["name"] = (
+                pynvml.nvmlDeviceGetName(handle).decode("utf-8")
+                if isinstance(pynvml.nvmlDeviceGetName(handle), bytes)
+                else pynvml.nvmlDeviceGetName(handle)
             )
-            if "Intel Neural Compute" in result.stdout or "Intel VPU" in result.stdout:
-                return {
-                    "name": "Intel Neural Compute Engine",
-                    "dedicated": True,
-                    "precision_support": ["INT8", "FP16"],
-                }
-        else:
-            result = subprocess.run(["lspci", "-v"], capture_output=True, text=True)
-            if "Intel Neural Compute" in result.stdout:
-                return {
-                    "name": "Intel Neural Compute Engine",
-                    "dedicated": True,
-                    "precision_support": ["INT8", "FP16"],
-                }
-    except Exception:
-        pass
+            info["compute_capability"] = f"{major}.{minor}"
+            info["cores"] = (
+                pynvml.nvmlDeviceGetNumGpuCores(handle)
+                if hasattr(pynvml, "nvmlDeviceGetNumGpuCores")
+                else None
+            )
+            info["memory"] = pynvml.nvmlDeviceGetMemoryInfo(handle).total // (
+                1024 * 1024
+            )  # Convert to MB
+            info["driver_version"] = (
+                pynvml.nvmlSystemGetDriverVersion().decode()
+                if isinstance(pynvml.nvmlSystemGetDriverVersion(), bytes)
+                else pynvml.nvmlSystemGetDriverVersion()
+            )
+            info["tensor_cores"] = float(info["compute_capability"]) >= 7.0
+            info["fp16_support"] = float(info["compute_capability"]) >= 7.0
+    except Exception as e:
+        print(f"Error getting NVIDIA NPU info: {e}")
 
-    # Check for Apple Neural Engine
-    if platform.system() == "Darwin" and platform.machine() == "arm64":
-        return {
-            "name": "Apple Neural Engine",
-            "dedicated": True,
-            "precision_support": ["INT8", "FP16"],
-        }
+    # Check for AMD GPU on Linux
+    if info["type"] == "none" and system == "Linux":
+        try:
+            result = subprocess.run(["rocm-smi", "-a"], capture_output=True, text=True)
+            if result.returncode == 0 and result.stdout:
+                info["type"] = "rocm"
+                # Parse rocm-smi output for device info
+                for line in result.stdout.splitlines():
+                    if "GPU[" in line:
+                        info["name"] = line.split(":")[1].strip()
+                    elif "Memory" in line:
+                        mem_match = re.search(r"(\d+)MB", line)
+                        if mem_match:
+                            info["memory"] = int(mem_match.group(1))
+        except FileNotFoundError:
+            print("ROCm not installed, skipping AMD GPU detection")
+        except Exception as e:
+            print(f"Error getting AMD GPU info: {e}")
 
-    return None
+    # Check for DirectML-compatible devices (Intel/AMD NPUs) on Windows
+    if info["type"] == "none" and system == "Windows":
+        try:
+            import torch_directml
+
+            device_count = torch_directml.device_count()
+            if device_count > 0:
+                info["type"] = "directml"
+                info["name"] = torch_directml.device_name(0)
+                # Try to get memory info from WMI as fallback
+                try:
+                    import wmi
+
+                    c = wmi.WMI()
+                    for gpu in c.Win32_VideoController():
+                        if gpu.Name == info["name"]:
+                            info["memory"] = (
+                                int(gpu.AdapterRAM) // (1024 * 1024)
+                                if gpu.AdapterRAM
+                                else None
+                            )
+                            info["driver_version"] = gpu.DriverVersion
+                            break
+                except Exception:
+                    pass
+        except ImportError:
+            print("DirectML not installed, skipping Intel/AMD NPU detection")
+        except Exception as e:
+            print(f"Error getting DirectML device info: {e}")
+
+    # Check for Apple Neural Engine on M1/M2 Macs
+    if info["type"] == "none" and system == "Darwin":
+        try:
+            result = subprocess.run(["sysctl", "-a"], capture_output=True, text=True)
+            if result.returncode == 0 and "machdep.cpu" in result.stdout:
+                info["type"] = "ane"
+                info["name"] = "Apple Neural Engine"
+                # Try to get more details about the chip
+                try:
+                    result = subprocess.run(
+                        ["system_profiler", "SPHardwareDataType"],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if "Chip" in result.stdout:
+                        for line in result.stdout.splitlines():
+                            if "Chip" in line:
+                                info["name"] = (
+                                    f"Apple Neural Engine ({line.split(':')[1].strip()})"
+                                )
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"Error getting Apple Neural Engine info: {e}")
+
+    # Check for other NPUs on Linux (Intel Movidius, AMD Ryzen AI, etc.)
+    if info["type"] == "none" and system == "Linux":
+        try:
+            result = subprocess.run(["lspci"], capture_output=True, text=True)
+            if result.returncode == 0:
+                output = result.stdout.lower()
+                if "movidius" in output:
+                    info["type"] = "movidius"
+                    info["name"] = "Intel Movidius VPU"
+                elif "ryzen ai" in output:
+                    info["type"] = "ryzen_ai"
+                    info["name"] = "AMD Ryzen AI NPU"
+                elif "hexagon" in output:
+                    info["type"] = "hexagon"
+                    info["name"] = "Qualcomm Hexagon DSP"
+        except Exception as e:
+            print(f"Error detecting Linux NPUs: {e}")
+
+    return info
 
 
 def get_firmware_info() -> Dict:
