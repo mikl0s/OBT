@@ -80,12 +80,17 @@ def get_cpu_info() -> Dict:
 
 def get_ram_info() -> Dict:
     """Get detailed RAM information."""
+    ram = psutil.virtual_memory()
+    info = {
+        "total": ram.total // (1024 * 1024),  # Convert to MB
+        "speed": 0,
+        "type": "Unknown",
+        "channels": 1,
+    }
+
     try:
         if platform.system() == "Windows":
             # Use wmic to get RAM info on Windows
-            ram_info = {"speed": 0, "type": "Unknown", "channels": 1, "modules": []}
-
-            # Get RAM type and speed
             proc = subprocess.run(
                 [
                     "wmic",
@@ -102,115 +107,61 @@ def get_ram_info() -> Dict:
                     line.strip() for line in proc.stdout.split("\n") if line.strip()
                 ]
                 if len(lines) > 1:  # Skip header
-                    modules = []
                     channels = set()
                     max_speed = 0
                     for line in lines[1:]:
                         if not line:
                             continue
-                        _, speed, mem_type, location, capacity = line.split(",")
-                        speed = int(speed) if speed.isdigit() else 0
-                        max_speed = max(max_speed, speed)
+                        try:
+                            parts = line.split(",")
+                            if len(parts) >= 4:  # Node,Speed,Type,Location,Capacity
+                                speed = int(parts[1]) if parts[1].isdigit() else 0
+                                max_speed = max(max_speed, speed)
+                                channels.add(
+                                    parts[3]
+                                )  # Use DeviceLocator for channel count
+                        except Exception:
+                            continue
 
-                        # Determine RAM type
-                        mem_types = {
-                            20: "DDR",
-                            21: "DDR2",
-                            22: "DDR2 FB-DIMM",
-                            24: "DDR3",
-                            26: "DDR4",
-                            27: "DDR5",
-                        }
-                        ram_type = (
-                            mem_types.get(int(mem_type), "Unknown")
-                            if mem_type.isdigit()
-                            else "Unknown"
-                        )
+                    if max_speed > 0:
+                        info["speed"] = max_speed
+                    if channels:
+                        info["channels"] = len(channels)
 
-                        # Extract channel from location (e.g., "DIMM 1" -> Channel 1)
-                        channel = re.search(r"\d+", location)
-                        if channel:
-                            channels.add(int(channel.group()))
-
-                        modules.append(
-                            {
-                                "size": int(capacity) // (1024 * 1024),  # Convert to MB
-                                "speed": speed,
-                                "location": location,
-                                "type": ram_type,
-                            }
-                        )
-
-                    ram_info.update(
-                        {
-                            "speed": max_speed,
-                            "type": ram_type,
-                            "channels": len(channels),
-                            "modules": modules,
-                        }
-                    )
-        else:
-            # Use dmidecode on Linux (requires root)
-            ram_info = {"speed": 0, "type": "Unknown", "channels": 1, "modules": []}
-
+        elif platform.system() == "Linux":
             try:
                 proc = subprocess.run(
-                    ["sudo", "dmidecode", "--type", "memory"],
+                    ["sudo", "dmidecode", "-t", "memory"],
                     capture_output=True,
                     text=True,
                 )
                 if proc.returncode == 0:
-                    modules = []
                     channels = set()
                     max_speed = 0
-                    current_module = {}
-
-                    for line in proc.stdout.split("\n"):
+                    for line in proc.stdout.splitlines():
                         line = line.strip()
-                        if "Memory Device" in line:
-                            if current_module:
-                                modules.append(current_module)
-                            current_module = {}
-                        elif "Size:" in line:
-                            size = re.search(r"Size: (\d+) ([GM]B)", line)
-                            if size:
-                                value, unit = size.groups()
-                                value = int(value)
-                                if unit == "GB":
-                                    value *= 1024
-                                current_module["size"] = value
-                        elif "Type:" in line and "Unknown" not in line:
-                            current_module["type"] = line.split(": ")[1]
-                        elif "Speed:" in line:
-                            speed = re.search(r"(\d+)", line)
-                            if speed:
-                                speed = int(speed.group(1))
-                                current_module["speed"] = speed
+                        if "Speed:" in line and "Configured" not in line:
+                            try:
+                                speed = int(line.split(":")[-1].strip().split()[0])
                                 max_speed = max(max_speed, speed)
+                            except Exception:
+                                continue
+                        elif "Type:" in line and "Unknown" not in line:
+                            info["type"] = line.split(":")[-1].strip()
                         elif "Locator:" in line:
-                            location = line.split(": ")[1]
-                            current_module["location"] = location
-                            channel = re.search(r"\d+", location)
-                            if channel:
-                                channels.add(int(channel.group()))
+                            channels.add(line.split(":")[-1].strip())
 
-                    if current_module:
-                        modules.append(current_module)
-
-                    ram_info.update(
-                        {
-                            "speed": max_speed,
-                            "type": modules[0]["type"] if modules else "Unknown",
-                            "channels": len(channels),
-                            "modules": modules,
-                        }
-                    )
+                    if max_speed > 0:
+                        info["speed"] = max_speed
+                    if channels:
+                        info["channels"] = len(channels)
             except Exception:
                 pass
 
-        return ram_info
-    except Exception:
-        return {"speed": 0, "type": "Unknown", "channels": 1, "modules": []}
+    except Exception as e:
+        print(f"Error getting RAM info: {e}")
+
+    return info
 
 
 def get_gpus_info() -> List[Dict]:
@@ -318,19 +269,17 @@ def get_firmware_info() -> Dict:
         "bios_vendor": "Unknown",
         "bios_release_date": "Unknown",
         "cpu_microcode": "Unknown",
-        "os_name": "",
-        "os_version": "",
-        "os_kernel": "",
+        "os_name": distro.name() if platform.system() == "Linux" else platform.system(),
+        "os_version": (
+            distro.version() if platform.system() == "Linux" else platform.version()
+        ),
+        "os_kernel": platform.release(),
         "ollama_version": "Unknown",
     }
 
     try:
         # Get OS info
         if platform.system() == "Windows":
-            info["os_name"] = "Windows"
-            info["os_version"] = platform.version()
-            info["os_kernel"] = platform.release()
-
             # Get BIOS info using wmic
             proc = subprocess.run(
                 [
@@ -348,67 +297,50 @@ def get_firmware_info() -> Dict:
                     line.strip() for line in proc.stdout.split("\n") if line.strip()
                 ]
                 if len(lines) > 1:  # Skip header
-                    _, version, vendor, date = lines[1].split(",")
-                    info["bios_version"] = version
-                    info["bios_vendor"] = vendor
-                    info["bios_release_date"] = date
-        else:
-            # Get Linux distribution info
-            info["os_name"] = distro.name(pretty=True)
-            info["os_version"] = distro.version(pretty=True)
-            info["os_kernel"] = platform.release()
+                    try:
+                        parts = lines[1].split(",")
+                        if len(parts) >= 4:  # Node,Version,Vendor,Date
+                            info["bios_version"] = parts[1]
+                            info["bios_vendor"] = parts[2]
+                            info["bios_release_date"] = parts[3]
+                    except Exception:
+                        pass  # Keep defaults if parsing fails
 
-            # Get BIOS info using dmidecode
+        elif platform.system() == "Linux":
             try:
+                # Try to get BIOS info from dmidecode
                 proc = subprocess.run(
                     ["sudo", "dmidecode", "-t", "bios"],
                     capture_output=True,
                     text=True,
                 )
                 if proc.returncode == 0:
-                    for line in proc.stdout.split("\n"):
+                    for line in proc.stdout.splitlines():
                         line = line.strip()
                         if "Version:" in line:
-                            info["bios_version"] = line.split("Version:", 1)[1].strip()
+                            info["bios_version"] = line.split("Version:")[-1].strip()
                         elif "Vendor:" in line:
-                            info["bios_vendor"] = line.split("Vendor:", 1)[1].strip()
+                            info["bios_vendor"] = line.split("Vendor:")[-1].strip()
                         elif "Release Date:" in line:
-                            info["bios_release_date"] = line.split("Release Date:", 1)[
-                                1
+                            info["bios_release_date"] = line.split("Release Date:")[
+                                -1
                             ].strip()
             except Exception:
-                pass
+                pass  # Keep defaults if dmidecode fails
 
-        # Get CPU microcode version
-        if platform.system() == "Linux":
             try:
-                with open("/proc/cpuinfo", "r") as f:
-                    for line in f:
-                        if "microcode" in line:
-                            info["cpu_microcode"] = line.split(":")[1].strip()
-                            break
-            except Exception:
-                pass
-        elif platform.system() == "Windows":
-            try:
+                # Get CPU microcode version
                 proc = subprocess.run(
-                    [
-                        "powershell",
-                        "-Command",
-                        "Get-WmiObject -Class Win32_Processor | Select-Object -ExpandProperty Description",
-                    ],
+                    ["grep", "microcode", "/proc/cpuinfo"],
                     capture_output=True,
                     text=True,
                 )
                 if proc.returncode == 0:
-                    # Try to extract microcode version from CPU description
-                    match = re.search(r"Microcode Revision: (\d+)", proc.stdout)
-                    if match:
-                        info["cpu_microcode"] = match.group(1)
+                    info["cpu_microcode"] = proc.stdout.strip().split(":")[-1].strip()
             except Exception:
                 pass
 
-        # Get Ollama version
+        # Try to get Ollama version
         try:
             proc = subprocess.run(
                 ["ollama", "--version"],
@@ -418,22 +350,7 @@ def get_firmware_info() -> Dict:
             if proc.returncode == 0:
                 info["ollama_version"] = proc.stdout.strip()
         except Exception:
-            # Try alternative method for Windows
-            if platform.system() == "Windows":
-                try:
-                    proc = subprocess.run(
-                        [
-                            "powershell",
-                            "-Command",
-                            "(Get-Item (Get-Command ollama).Source).VersionInfo.FileVersion",
-                        ],
-                        capture_output=True,
-                        text=True,
-                    )
-                    if proc.returncode == 0:
-                        info["ollama_version"] = proc.stdout.strip()
-                except Exception:
-                    pass
+            pass
 
     except Exception as e:
         print(f"Error getting firmware info: {e}")
