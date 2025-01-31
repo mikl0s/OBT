@@ -4,19 +4,23 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from app.models.base import MongoModel
 
 
-class OllamaModel(MongoModel):
+class OllamaModel(BaseModel):
     """Ollama model information."""
 
-    name: str = Field(..., description="Model name")
-    tags: List[str] = Field(default_factory=list, description="Model tags")
-    version: str = Field(..., description="Model version")
-    size: int = Field(..., description="Model size in bytes")
-    modified: float = Field(..., description="Last modification timestamp")
+    name: str
+    tags: List[str] = []
+    size: int = 0
+    modified: float = Field(default_factory=lambda: datetime.now().timestamp())
+    version: str = "unknown"
+    digest: str = Field(default="", description="Model digest")
+
+    class Config:
+        json_encoders = {float: lambda v: v}
 
 
 class TestType(str, Enum):

@@ -50,23 +50,13 @@ async def handle_heartbeat(
         # If client not found, register with new registration ID
         await register_client(client_id, version)
 
-    client = ollama_clients[client_id]
-    client["last_heartbeat"] = datetime.now()
-    client["available"] = ollama_available
-    client["version"] = version
-    client["missed_heartbeats"] = 0
-
-    if ollama_available and models:
-        client["models"] = await sync_models(client_id, models)
-    else:
-        client["models"] = []
-
+    await update_client_status(client_id, version, ollama_available, models)
     return True
 
 
 async def get_client(client_id: str) -> Optional[Dict]:
     """Get client info by ID."""
-    if not is_client_healthy(client_id):
+    if not await is_client_healthy(client_id):
         return None
     return ollama_clients.get(client_id)
 
@@ -77,7 +67,6 @@ async def sync_models(client_id: str, models: List[Dict]) -> List[OllamaModel]:
         OllamaModel(
             name=model["name"],
             tags=model.get("tags", []),
-            version=model.get("version", "unknown"),
             size=model.get("size", 0),
             modified=model.get("modified", 0),  # Store as timestamp
         )
@@ -101,14 +90,28 @@ async def update_client_status(
 ):
     """Update client status from heartbeat."""
     if client_id not in ollama_clients:
-        logger.warning(f"Received heartbeat from unregistered client: {client_id}")
         return
 
-    client = ollama_clients[client_id]
-    client["version"] = version
-    client["available"] = available
-    client["last_heartbeat"] = datetime.now()
-    client["models"] = models
+    # Convert models to OllamaModel instances
+    ollama_models = [
+        OllamaModel(
+            name=model["name"],
+            tags=model.get("tags", []),
+            size=model.get("size", 0),
+            modified=model.get("modified", 0),
+        )
+        for model in models
+    ]
+
+    ollama_clients[client_id].update(
+        {
+            "version": version,
+            "last_heartbeat": datetime.now(),
+            "available": available,
+            "models": ollama_models,
+            "missed_heartbeats": 0,
+        }
+    )
 
 
 async def generate_completion(
