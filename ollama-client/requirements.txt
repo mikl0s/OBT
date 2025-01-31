@@ -10,3 +10,4 @@ psutil>=5.9.0
 py-cpuinfo>=9.0.0
 nvidia-ml-py>=12.535.108
 torch>=2.1.0
+numpy>=1.24.0
