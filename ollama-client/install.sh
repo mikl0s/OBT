@@ -47,7 +47,7 @@ fi
 mkdir -p "$SCRIPT_DIR"
 
 # Download required files if they don't exist
-required_files=(".env.example" "requirements.txt" "start.sh" "main.py")
+required_files=(".env.example" "requirements.txt" "start.sh" "main.py" "hardware_info.py")
 for file in "${required_files[@]}"; do
     download_github_file "$file" "$SCRIPT_DIR/$file"
 done

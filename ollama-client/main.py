@@ -4,10 +4,9 @@ import asyncio
 import logging
 import signal
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import aiohttp
-import cpuinfo
 import psutil
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -73,15 +72,56 @@ class OllamaModel(BaseModel):
         json_encoders = {float: lambda v: v}
 
 
-class HardwareInfo(BaseModel):
-    """Hardware information."""
+class CPUInfo(BaseModel):
+    """Detailed CPU information."""
 
-    cpu_name: str = Field(..., description="CPU model name")
-    cpu_threads: int = Field(..., description="Number of CPU threads")
+    name: str = Field(..., description="CPU model name")
+    architecture: str = Field(..., description="CPU architecture (e.g., x86_64, arm64)")
+    base_clock: float = Field(..., description="Base clock speed in GHz")
+    boost_clock: Optional[float] = Field(
+        None, description="Max boost clock speed in GHz"
+    )
+    cores: int = Field(..., description="Number of physical cores")
+    threads: int = Field(..., description="Number of threads")
+    core_types: Optional[Dict] = Field(
+        None, description="Performance and efficiency core counts"
+    )
+    features: List[str] = Field(
+        default_factory=list, description="AI-related CPU features (AVX-512, AMX, etc.)"
+    )
+
+
+class GPUInfo(BaseModel):
+    """Detailed GPU information."""
+
+    name: str = Field(..., description="GPU model name")
+    vram_size: int = Field(..., description="VRAM size in MB")
+    vram_type: str = Field(..., description="VRAM type (GDDR6X, HBM2, etc.)")
+    tensor_cores: Optional[int] = Field(None, description="Number of tensor cores")
+    cuda_cores: Optional[int] = Field(None, description="Number of CUDA cores")
+    compute_capability: Optional[str] = Field(
+        None, description="GPU compute capability version"
+    )
+
+
+class NPUInfo(BaseModel):
+    """Neural Processing Unit information."""
+
+    name: Optional[str] = Field(None, description="NPU name/model")
+    compute_power: Optional[float] = Field(None, description="Compute power in TOPS")
+    precision_support: Optional[List[str]] = Field(
+        None, description="Supported precision formats"
+    )
+    dedicated: Optional[bool] = Field(None, description="Whether it's a dedicated NPU")
+
+
+class HardwareInfo(BaseModel):
+    """Complete system hardware information."""
+
+    cpu: CPUInfo = Field(..., description="CPU information")
+    gpu: Optional[GPUInfo] = Field(None, description="GPU information if available")
+    npu: Optional[NPUInfo] = Field(None, description="NPU information if available")
     total_memory: int = Field(..., description="Total system memory in MB")
-    gpu_count: int = Field(default=0, description="Number of GPUs")
-    gpu_name: Optional[str] = Field(default=None, description="GPU model name")
-    gpu_memory: Optional[int] = Field(default=None, description="GPU memory in MB")
 
 
 class BenchmarkConfig(BaseModel):
@@ -158,54 +198,22 @@ async def get_installed_models() -> List[OllamaModel]:
 async def get_hardware_info() -> HardwareInfo:
     """Get hardware information."""
     try:
-        # Get CPU info
-        cpu_info = cpuinfo.get_cpu_info()
-        cpu_name = cpu_info.get("brand_raw", "Unknown CPU")
-        cpu_threads = psutil.cpu_count(logical=True)
+        import hardware_info
 
-        # Get memory info (convert bytes to MB)
-        memory = psutil.virtual_memory()
-        total_memory = memory.total // (1024 * 1024)  # Convert bytes to MB
-
-        # Try to get GPU info using nvidia-smi
-        gpu_count = 0
-        gpu_name = None
-        gpu_memory = None
-
-        try:
-            import pynvml
-
-            pynvml.nvmlInit()
-            gpu_count = pynvml.nvmlDeviceGetCount()
-            if gpu_count > 0:
-                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-                gpu_name = pynvml.nvmlDeviceGetName(handle).decode("utf-8")
-                # Convert bytes to MB
-                gpu_memory = pynvml.nvmlDeviceGetMemoryInfo(handle).total // (
-                    1024 * 1024
-                )
-            pynvml.nvmlShutdown()
-        except Exception as e:
-            logger.debug(f"No NVIDIA GPU found: {e}")
-
-        hardware = HardwareInfo(
-            cpu_name=cpu_name,
-            cpu_threads=cpu_threads,
-            total_memory=total_memory,
-            gpu_count=gpu_count,
-            gpu_name=gpu_name,
-            gpu_memory=gpu_memory,
-        )
-        logger.debug(f"Collected hardware info: {hardware.model_dump_json()}")
-        return hardware
+        return HardwareInfo(**hardware_info.get_hardware_info())
     except Exception as e:
         logger.error(f"Error getting hardware info: {e}")
         # Return minimal info to avoid registration failure
         return HardwareInfo(
-            cpu_name="Unknown CPU",
-            cpu_threads=1,
+            cpu=CPUInfo(
+                name="Unknown CPU",
+                architecture="unknown",
+                base_clock=1.0,
+                cores=1,
+                threads=1,
+                features=[],
+            ),
             total_memory=1024,  # 1GB in MB
-            gpu_count=0,
         )
 
 
@@ -304,7 +312,7 @@ async def run_benchmark(benchmark_id: str, config: BenchmarkConfig) -> None:
                     json={
                         "model": config.model_name,
                         "prompt": config.prompt_config["prompt"],
-                        "options": {"num_gpu": 1 if hardware.gpu_count > 0 else 0},
+                        "options": {"num_gpu": 1 if hardware.cpu.threads > 1 else 0},
                     },
                 ) as response:
                     if response.status != 200:
@@ -323,10 +331,10 @@ async def run_benchmark(benchmark_id: str, config: BenchmarkConfig) -> None:
                     memory_usage_mb=psutil.Process().memory_info().rss / (1024 * 1024),
                     cpu_usage_percent=psutil.cpu_percent(),
                     gpu_memory_usage_mb=(
-                        hardware.gpu_memory if hardware.gpu_memory else None
+                        hardware.gpu.vram_size if hardware.gpu else None
                     ),
                     gpu_usage_percent=(
-                        100 if hardware.gpu_count > 0 else None
+                        100 if hardware.gpu else None
                     ),  # Ollama uses 100% GPU when active
                 )
             )
