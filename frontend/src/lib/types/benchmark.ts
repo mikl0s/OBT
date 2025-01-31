@@ -27,7 +27,38 @@ export interface BenchmarkMetrics {
 	gpu_usage_percent?: number;
 }
 
+export interface Client {
+	id: string;
+	name: string;
+	hardware: {
+		cpu: string;
+		threads: number;
+		memory: number;
+		gpu?: string;
+	};
+	models: Model[];
+}
+
+export interface Model {
+	id: string;
+	name: string;
+	parameters: string;
+}
+
 export interface BenchmarkResult {
+	id: string;
+	clientId: string;
+	promptId: string;
+	startTime: Date;
+	endTime?: Date;
+	status: 'pending' | 'running' | 'completed' | 'failed';
+	metrics: {
+		tokensPerSecond?: number;
+		peakMemory?: number;
+	};
+}
+
+export interface OriginalBenchmarkResult {
 	id: string;
 	client_id: string;
 	config: BenchmarkConfig;

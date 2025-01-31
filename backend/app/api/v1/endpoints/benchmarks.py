@@ -1,17 +1,15 @@
+"""Benchmark endpoints."""
+
 from typing import List, Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from ....benchmarks.core.benchmark_engine import BenchmarkEngine
-from ....benchmarks.schemas.benchmark import (
-    BenchmarkConfig,
-    BenchmarkResult,
-    HardwareSelection,
-)
+from ....benchmarks.schemas.benchmark import BenchmarkConfig, BenchmarkResult
 from ....benchmarks.storage.benchmark_storage import BenchmarkStorage
 from ....core.deps import get_db
-from ....services.ollama import OllamaService
+from ....services.ollama import get_active_clients
 from ....services.prompts import get_prompt_content
 
 router = APIRouter()
@@ -21,14 +19,15 @@ router = APIRouter()
 async def start_benchmark(
     client_id: str,
     models: List[str],
-    hardware: HardwareSelection,
+    hardware: dict,
     prompts: Optional[List[str]] = None,
     db: AsyncIOMotorClient = Depends(get_db),
-    ollama_service: OllamaService = Depends(),
 ):
     """Start benchmarks for multiple models."""
-    engine = BenchmarkEngine(ollama_service)
-    benchmark_ids = []
+    # Verify client is active
+    clients = get_active_clients()
+    if client_id not in clients:
+        raise HTTPException(status_code=404, detail="Client not found or inactive")
 
     # Get prompts content
     if prompts:
@@ -38,8 +37,11 @@ async def start_benchmark(
         all_prompts = await get_prompt_content([])
         prompt_contents = {p.id: p.content for p in all_prompts}
 
+    benchmark_ids = []
     for model in models:
-        for _prompt_id, prompt_content in prompt_contents.items():
+        for prompt_id, prompt_content in prompt_contents.items():
+            # Create benchmark configuration
+            benchmark_id = str(uuid4())
             config = BenchmarkConfig(
                 model_name=model,
                 prompt_config={
@@ -48,15 +50,41 @@ async def start_benchmark(
                 },
                 hardware=hardware,
             )
-            benchmark_id = await engine.start_benchmark(client_id, config)
+
+            # Store initial benchmark state
+            storage = BenchmarkStorage(db)
+            await storage.store_result(
+                BenchmarkResult(
+                    benchmark_id=benchmark_id,
+                    client_id=client_id,
+                    config=config,
+                    status="pending",
+                )
+            )
+
+            # Send benchmark request to client
+            client = clients[client_id]
+            await client.run_benchmark(benchmark_id, config)
             benchmark_ids.append(benchmark_id)
 
     return {"benchmark_ids": benchmark_ids}
 
 
+@router.post("/update")
+async def update_benchmark_result(
+    result: BenchmarkResult,
+    db: AsyncIOMotorClient = Depends(get_db),
+):
+    """Update benchmark result from client."""
+    storage = BenchmarkStorage(db)
+    await storage.store_result(result)
+    return {"status": "ok"}
+
+
 @router.get("/status/{benchmark_id}", response_model=Optional[BenchmarkResult])
 async def get_benchmark_status(
-    benchmark_id: str, db: AsyncIOMotorClient = Depends(get_db)
+    benchmark_id: str,
+    db: AsyncIOMotorClient = Depends(get_db),
 ):
     """Get the status of a running benchmark."""
     storage = BenchmarkStorage(db)
@@ -93,10 +121,13 @@ async def get_benchmarks(
 
 
 @router.delete("/{benchmark_id}")
-async def delete_benchmark(benchmark_id: str, db: AsyncIOMotorClient = Depends(get_db)):
+async def delete_benchmark(
+    benchmark_id: str,
+    db: AsyncIOMotorClient = Depends(get_db),
+):
     """Delete a specific benchmark result."""
     storage = BenchmarkStorage(db)
     success = await storage.delete_result(benchmark_id)
     if not success:
         raise HTTPException(status_code=404, detail="Benchmark not found")
-    return {"status": "success"}
+    return {"status": "ok"}

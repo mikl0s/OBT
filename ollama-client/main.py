@@ -45,12 +45,16 @@ class Settings(BaseSettings):
     CLIENT_ID: str = Field(default="default", env="CLIENT_ID")
     OBT_SERVER_URL: str = Field(default="http://localhost:8881", env="OBT_SERVER_URL")
     OLLAMA_URL: str = Field(default="http://localhost:11434", env="OLLAMA_URL")
+    HEARTBEAT_INTERVAL: int = Field(
+        default=10, description="Heartbeat interval in seconds"
+    )
     registration_id: Optional[str] = None
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "allow"  # Allow extra fields in .env and environment variables
 
 
 settings = Settings()
