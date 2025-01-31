@@ -3,7 +3,7 @@
 import platform
 import re
 import subprocess
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import cpuinfo
 import psutil
@@ -77,14 +77,151 @@ def get_cpu_info() -> Dict:
     }
 
 
-def get_gpu_info() -> Optional[Dict]:
-    """Get detailed GPU information."""
+def get_ram_info() -> Dict:
+    """Get detailed RAM information."""
     try:
-        # Try NVIDIA GPU first
+        if platform.system() == "Windows":
+            # Use wmic to get RAM info on Windows
+            ram_info = {"speed": 0, "type": "Unknown", "channels": 1, "modules": []}
+
+            # Get RAM type and speed
+            proc = subprocess.run(
+                [
+                    "wmic",
+                    "memorychip",
+                    "get",
+                    "Speed,MemoryType,DeviceLocator,Capacity",
+                    "/format:csv",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode == 0:
+                lines = [
+                    line.strip() for line in proc.stdout.split("\n") if line.strip()
+                ]
+                if len(lines) > 1:  # Skip header
+                    modules = []
+                    channels = set()
+                    max_speed = 0
+                    for line in lines[1:]:
+                        if not line:
+                            continue
+                        _, speed, mem_type, location, capacity = line.split(",")
+                        speed = int(speed) if speed.isdigit() else 0
+                        max_speed = max(max_speed, speed)
+
+                        # Determine RAM type
+                        mem_types = {
+                            20: "DDR",
+                            21: "DDR2",
+                            22: "DDR2 FB-DIMM",
+                            24: "DDR3",
+                            26: "DDR4",
+                            27: "DDR5",
+                        }
+                        ram_type = (
+                            mem_types.get(int(mem_type), "Unknown")
+                            if mem_type.isdigit()
+                            else "Unknown"
+                        )
+
+                        # Extract channel from location (e.g., "DIMM 1" -> Channel 1)
+                        channel = re.search(r"\d+", location)
+                        if channel:
+                            channels.add(int(channel.group()))
+
+                        modules.append(
+                            {
+                                "size": int(capacity) // (1024 * 1024),  # Convert to MB
+                                "speed": speed,
+                                "location": location,
+                                "type": ram_type,
+                            }
+                        )
+
+                    ram_info.update(
+                        {
+                            "speed": max_speed,
+                            "type": ram_type,
+                            "channels": len(channels),
+                            "modules": modules,
+                        }
+                    )
+        else:
+            # Use dmidecode on Linux (requires root)
+            ram_info = {"speed": 0, "type": "Unknown", "channels": 1, "modules": []}
+
+            try:
+                proc = subprocess.run(
+                    ["sudo", "dmidecode", "--type", "memory"],
+                    capture_output=True,
+                    text=True,
+                )
+                if proc.returncode == 0:
+                    modules = []
+                    channels = set()
+                    max_speed = 0
+                    current_module = {}
+
+                    for line in proc.stdout.split("\n"):
+                        line = line.strip()
+                        if "Memory Device" in line:
+                            if current_module:
+                                modules.append(current_module)
+                            current_module = {}
+                        elif "Size:" in line:
+                            size = re.search(r"Size: (\d+) ([GM]B)", line)
+                            if size:
+                                value, unit = size.groups()
+                                value = int(value)
+                                if unit == "GB":
+                                    value *= 1024
+                                current_module["size"] = value
+                        elif "Type:" in line and "Unknown" not in line:
+                            current_module["type"] = line.split(": ")[1]
+                        elif "Speed:" in line:
+                            speed = re.search(r"(\d+)", line)
+                            if speed:
+                                speed = int(speed.group(1))
+                                current_module["speed"] = speed
+                                max_speed = max(max_speed, speed)
+                        elif "Locator:" in line:
+                            location = line.split(": ")[1]
+                            current_module["location"] = location
+                            channel = re.search(r"\d+", location)
+                            if channel:
+                                channels.add(int(channel.group()))
+
+                    if current_module:
+                        modules.append(current_module)
+
+                    ram_info.update(
+                        {
+                            "speed": max_speed,
+                            "type": modules[0]["type"] if modules else "Unknown",
+                            "channels": len(channels),
+                            "modules": modules,
+                        }
+                    )
+            except Exception:
+                pass
+
+        return ram_info
+    except Exception:
+        return {"speed": 0, "type": "Unknown", "channels": 1, "modules": []}
+
+
+def get_gpus_info() -> List[Dict]:
+    """Get detailed information for all available GPUs."""
+    gpus = []
+    try:
+        # Try NVIDIA GPUs first
         pynvml.nvmlInit()
         device_count = pynvml.nvmlDeviceGetCount()
-        if device_count > 0:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+
+        for i in range(device_count):
+            handle = pynvml.nvmlDeviceGetHandleByIndex(i)
             info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             name = pynvml.nvmlDeviceGetName(handle).decode("utf-8")
             compute_cap = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
@@ -110,20 +247,29 @@ def get_gpu_info() -> Optional[Dict]:
                 sm_count * 4
             )  # Most modern NVIDIA GPUs have 4 tensor cores per SM
 
-            pynvml.nvmlShutdown()
+            # Get PCIe info
+            pcie_info = pynvml.nvmlDeviceGetMaxPcieLinkGeneration(handle)
+            pcie_width = pynvml.nvmlDeviceGetMaxPcieLinkWidth(handle)
 
-            return {
-                "name": name,
-                "vram_size": info.total // (1024 * 1024),  # Convert to MB
-                "vram_type": vram_type,
-                "tensor_cores": tensor_cores,
-                "cuda_cores": cuda_cores,
-                "compute_capability": f"{compute_cap[0]}.{compute_cap[1]}",
-            }
+            gpus.append(
+                {
+                    "name": name,
+                    "vram_size": info.total // (1024 * 1024),  # Convert to MB
+                    "vram_type": vram_type,
+                    "tensor_cores": tensor_cores,
+                    "cuda_cores": cuda_cores,
+                    "compute_capability": f"{compute_cap[0]}.{compute_cap[1]}",
+                    "pcie_gen": pcie_info,
+                    "pcie_width": f"x{pcie_width}",
+                    "index": i,
+                }
+            )
+
+        pynvml.nvmlShutdown()
     except Exception:
         pass
 
-    return None
+    return gpus
 
 
 def get_npu_info() -> Optional[Dict]:
@@ -168,7 +314,8 @@ def get_hardware_info() -> Dict:
     """Get complete hardware information."""
     return {
         "cpu": get_cpu_info(),
-        "gpu": get_gpu_info(),
+        "gpus": get_gpus_info(),
+        "ram": get_ram_info(),
         "npu": get_npu_info(),
         "total_memory": psutil.virtual_memory().total // (1024 * 1024),  # Convert to MB
     }
