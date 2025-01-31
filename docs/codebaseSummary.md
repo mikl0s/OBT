@@ -253,3 +253,51 @@ python-dotenv==1.0.0
 2. Enhance result visualization
 3. Implement batch operations
 4. Add advanced analytics
+
+## Codebase Summary
+
+### Recent Changes
+
+### Hardware Detection Enhancement (2025-01-31)
+- Added comprehensive cross-platform hardware detection
+- Extended NPU support for all major platforms:
+  - Windows: NVIDIA CUDA, DirectML for Intel/AMD
+  - Linux: NVIDIA, AMD ROCm, specialized NPUs
+  - macOS: Apple Neural Engine on M1/M2
+- Added detailed hardware capabilities reporting:
+  - Memory size and utilization
+  - Compute capabilities
+  - Driver versions
+  - Advanced features (Tensor Cores, FP16)
+
+### Key Components
+
+#### Hardware Information Module
+- Location: `ollama-client/hardware_info.py`
+- Purpose: Cross-platform hardware detection and monitoring
+- Features:
+  - CPU information and utilization
+  - Memory status and management
+  - GPU/NPU detection and capabilities
+  - System information gathering
+- Testing: Run `show_hardware_info.py` to verify detection
+
+#### Client Installation
+- Windows: PowerShell installer script
+- macOS/Linux: Manual pip installation
+- Environment setup and dependency management
+
+## Data Flow
+1. Hardware detection runs on client startup
+2. Information gathered from multiple sources:
+   - System APIs (psutil, cpuinfo)
+   - GPU libraries (NVML, ROCm)
+   - OS-specific tools (WMI, sysctl)
+3. Data aggregated and normalized
+4. Results reported to OBT server
+
+## External Dependencies
+See `requirements.txt` for full list
+- Core libraries (cross-platform)
+- OS-specific libraries (conditionally installed)
+- Optional enhancements (DirectML, ROCm)

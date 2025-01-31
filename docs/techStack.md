@@ -79,6 +79,53 @@
   - Cross-platform compatibility
   - Real-time model synchronization
 
+## Hardware Detection
+## Core Technologies
+
+### Client Hardware Detection
+- **Cross-Platform Support**
+  - Windows, Linux, macOS supported
+  - Platform-specific optimizations for each OS
+
+### Hardware Detection Libraries
+- **NVIDIA GPU Detection**
+  - `pynvml`: NVIDIA Management Library for GPU info
+  - Provides: VRAM, compute capability, driver versions
+  - Tensor Core and FP16 support detection
+
+- **AMD GPU Detection (Linux)**
+  - `rocm-smi`: ROCm System Management Interface
+  - Hardware info via command line tools
+  - Memory and driver information
+
+- **Apple Neural Engine (macOS)**
+  - Native system tools: `sysctl`, `system_profiler`
+  - M1/M2 chip detection and capabilities
+
+- **Windows-Specific**
+  - `wmi`: Windows Management Instrumentation
+  - `pywin32`: Windows API access
+  - `DirectML`: Intel/AMD NPU detection
+
+- **Linux-Specific**
+  - `lspci`: PCI device detection
+  - Support for Movidius, Ryzen AI, Hexagon DSP
+
+### System Information
+- `psutil`: Cross-platform system monitoring
+- `py-cpuinfo`: Detailed CPU information
+- `distro`: Linux distribution detection
+
+## Dependencies
+- Core dependencies are cross-platform
+- OS-specific dependencies are conditionally installed
+- Optional components (e.g., DirectML) for enhanced detection
+
+## Installation
+- Windows: PowerShell installer script
+- macOS/Linux: Manual installation via pip
+- Virtual environment recommended for isolation
+
 ## Architecture Overview
 
 ### Components
