@@ -2,6 +2,7 @@
 
 import platform
 import re
+import shutil
 import subprocess
 import winreg
 from datetime import datetime
@@ -455,10 +456,64 @@ def get_hardware_info() -> Dict:
 
 
 def get_ollama_version() -> str:
+    """Get Ollama version using multiple methods."""
+    if platform.system() == "Windows":
+        # Find ollama executable path
+        exe_path = shutil.which("ollama.exe")
+        if not exe_path:
+            print("Ollama executable not found in PATH")
+            return "Unknown"
+
+        # Method 1: Try Windows Registry (no admin required)
+        try:
+            registry_path = (
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Ollama"
+            )
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, registry_path) as key:
+                version = winreg.QueryValueEx(key, "DisplayVersion")[0]
+                if version:
+                    return version
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"Error reading registry: {e}")
+
+        # Method 2: Try win32api (built into Windows)
+        try:
+            import win32api
+
+            info = win32api.GetFileVersionInfo(exe_path, "\\")
+            ms = info["FileVersionMS"]
+            ls = info["FileVersionLS"]
+            version = f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"
+            return version
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"Error reading version with win32api: {e}")
+
+        # Method 3: Try pefile (if installed)
+        try:
+            import pefile
+
+            pe = pefile.PE(exe_path)
+            for file_info in pe.FileInfo:
+                for entry in file_info:
+                    if entry.Key == b"StringFileInfo":
+                        for st in entry.StringTable:
+                            if "FileVersion" in st.entries:
+                                return st.entries["FileVersion"].decode()
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"Error reading version with pefile: {e}")
+
+    # Fallback for non-Windows or if all Windows methods fail
     try:
         proc = subprocess.run(["ollama", "--version"], capture_output=True, text=True)
-        if proc.returncode == 0:
+        if proc.returncode == 0 and proc.stdout.strip():
             return proc.stdout.strip()
     except Exception:
         pass
+
     return "Unknown"
