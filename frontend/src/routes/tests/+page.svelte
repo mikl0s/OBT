@@ -32,7 +32,7 @@
 	let hardwareConfig = {
 		use_gpu: false,
 		gpu_id: null as string | null,
-		threads: navigator.hardwareConcurrency || 4
+		threads: 4 // Default value
 	};
 	let availableGPUs: GPU[] = [];
 
@@ -49,21 +49,51 @@
 	}
 
 	onMount(async () => {
+		// Set hardware concurrency if in browser environment
+		if (typeof navigator !== 'undefined') {
+			hardwareConfig.threads = navigator.hardwareConcurrency || 4;
+		}
+
 		try {
+			console.log('Fetching data from backend...');
 			// Fetch clients, prompts, and hardware info in parallel
 			const [clientsRes, promptsRes, gpusRes] = await Promise.all([
 				fetch('http://localhost:8881/api/v1/models/clients'),
-				fetch('http://localhost:8881/api/v1/prompts'),
-				fetch('http://localhost:8881/api/v1/hardware/gpus')
+				fetch('http://localhost:8881/api/v1/prompts/test-suites'),
+				fetch('http://localhost:8881/api/v1/hardware/gpu')
 			]);
 
-			if (!clientsRes.ok) throw new Error('Failed to fetch clients');
-			if (!promptsRes.ok) throw new Error('Failed to fetch prompts');
-			if (!gpusRes.ok) throw new Error('Failed to fetch GPU info');
+			console.log('Clients response status:', clientsRes.status);
+			console.log('Prompts response status:', promptsRes.status);
+			console.log('GPUs response status:', gpusRes.status);
 
-			clients = await clientsRes.json();
-			prompts = await promptsRes.json();
-			availableGPUs = await gpusRes.json();
+			if (!clientsRes.ok) {
+				throw new Error(`Failed to fetch clients: ${clientsRes.status} ${await clientsRes.text()}`);
+			}
+			if (!promptsRes.ok) {
+				throw new Error(`Failed to fetch prompts: ${promptsRes.status} ${await promptsRes.text()}`);
+			}
+			if (!gpusRes.ok) {
+				throw new Error(`Failed to fetch GPUs: ${gpusRes.status} ${await gpusRes.text()}`);
+			}
+
+			// Parse responses
+			const [clientsData, promptsData, gpusData] = await Promise.all([
+				clientsRes.json(),
+				promptsRes.json(),
+				gpusRes.json()
+			]).catch((e) => {
+				console.error('Failed to parse response data:', e);
+				throw e;
+			});
+
+			console.log('Received clients:', clientsData);
+			console.log('Received prompts:', promptsData);
+			console.log('Received GPUs:', gpusData);
+
+			clients = clientsData;
+			prompts = promptsData;
+			availableGPUs = gpusData;
 
 			// Auto-select first available client
 			if (clients.length > 0) {
