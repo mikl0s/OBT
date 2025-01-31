@@ -1,14 +1,14 @@
 """Hardware information collection module."""
 
+import datetime
 import platform
 import re
 import subprocess
+import winreg
 from typing import Dict, List, Optional
 
 import cpuinfo
-import distro
 import psutil
-import pynvml
 
 
 def get_cpu_info() -> Dict:
@@ -79,147 +79,180 @@ def get_cpu_info() -> Dict:
 
 
 def get_ram_info() -> Dict:
-    """Get detailed RAM information."""
-    ram = psutil.virtual_memory()
-    info = {
-        "total": ram.total // (1024 * 1024),  # Convert to MB
-        "speed": 0,
-        "type": "Unknown",
-        "channels": 1,
-    }
-
+    """Get RAM information."""
     try:
         if platform.system() == "Windows":
-            # Use wmic to get RAM info on Windows
-            proc = subprocess.run(
-                [
-                    "wmic",
-                    "memorychip",
-                    "get",
-                    "Speed,MemoryType,DeviceLocator,Capacity",
-                    "/format:csv",
-                ],
-                capture_output=True,
-                text=True,
-            )
-            if proc.returncode == 0:
-                lines = [
-                    line.strip() for line in proc.stdout.split("\n") if line.strip()
-                ]
-                if len(lines) > 1:  # Skip header
-                    channels = set()
-                    max_speed = 0
-                    for line in lines[1:]:
-                        if not line:
-                            continue
-                        try:
-                            parts = line.split(",")
-                            if len(parts) >= 4:  # Node,Speed,Type,Location,Capacity
-                                speed = int(parts[1]) if parts[1].isdigit() else 0
-                                max_speed = max(max_speed, speed)
-                                channels.add(
-                                    parts[3]
-                                )  # Use DeviceLocator for channel count
-                        except Exception:
-                            continue
+            import wmi
 
-                    if max_speed > 0:
-                        info["speed"] = max_speed
-                    if channels:
-                        info["channels"] = len(channels)
+            w = wmi.WMI()
+            total_memory = 0
+            ram_type = "Unknown"
+            speed = 0
+            channels = 1
 
-        elif platform.system() == "Linux":
-            try:
-                proc = subprocess.run(
-                    ["sudo", "dmidecode", "-t", "memory"],
-                    capture_output=True,
-                    text=True,
+            # Get physical memory arrays to determine channels
+            for mem_array in w.Win32_PhysicalMemoryArray():
+                channels = mem_array.MemoryDevices if mem_array.MemoryDevices else 1
+
+            # Get memory modules
+            modules = []
+            for mem in w.Win32_PhysicalMemory():
+                total_memory += int(mem.Capacity) if mem.Capacity else 0
+                if mem.Speed:
+                    speed = max(speed, int(mem.Speed))
+                if mem.SMBIOSMemoryType:
+                    # DDR4 is type 26
+                    if mem.SMBIOSMemoryType == 26:
+                        ram_type = "DDR4"
+                    # DDR5 is type 30
+                    elif mem.SMBIOSMemoryType == 30:
+                        ram_type = "DDR5"
+                modules.append(
+                    {
+                        "capacity": (
+                            int(mem.Capacity) // (1024 * 1024) if mem.Capacity else 0
+                        ),  # Convert to MB
+                        "speed": int(mem.Speed) if mem.Speed else 0,
+                        "manufacturer": (
+                            mem.Manufacturer if mem.Manufacturer else "Unknown"
+                        ),
+                        "part_number": (
+                            mem.PartNumber.strip() if mem.PartNumber else "Unknown"
+                        ),
+                    }
                 )
-                if proc.returncode == 0:
-                    channels = set()
-                    max_speed = 0
-                    for line in proc.stdout.splitlines():
-                        line = line.strip()
-                        if "Speed:" in line and "Configured" not in line:
-                            try:
-                                speed = int(line.split(":")[-1].strip().split()[0])
-                                max_speed = max(max_speed, speed)
-                            except Exception:
-                                continue
-                        elif "Type:" in line and "Unknown" not in line:
-                            info["type"] = line.split(":")[-1].strip()
-                        elif "Locator:" in line:
-                            channels.add(line.split(":")[-1].strip())
 
-                    if max_speed > 0:
-                        info["speed"] = max_speed
-                    if channels:
-                        info["channels"] = len(channels)
-            except Exception:
+            return {
+                "total": total_memory // (1024 * 1024),  # Convert to MB
+                "type": ram_type,
+                "speed": speed,
+                "channels": channels,
+                "modules": modules,
+            }
+        else:
+            # Linux implementation
+            total_memory = psutil.virtual_memory().total // (
+                1024 * 1024
+            )  # Convert to MB
+
+            # Try to get RAM type and speed from dmidecode
+            ram_type = "Unknown"
+            speed = 0
+            channels = 1
+            try:
+                dmidecode_output = subprocess.check_output(
+                    ["dmidecode", "-t", "memory"], universal_newlines=True
+                )
+                for line in dmidecode_output.split("\n"):
+                    if "Type:" in line and "Unknown" not in line:
+                        ram_type = line.split(":")[1].strip()
+                    elif "Speed:" in line and "Unknown" not in line:
+                        try:
+                            speed = int(line.split(":")[1].strip().split()[0])
+                        except (ValueError, IndexError):
+                            pass
+                    elif "Number Of Devices:" in line:
+                        try:
+                            channels = int(line.split(":")[1].strip())
+                        except (ValueError, IndexError):
+                            pass
+            except (subprocess.CalledProcessError, PermissionError):
                 pass
+
+            return {
+                "total": total_memory,
+                "type": ram_type,
+                "speed": speed,
+                "channels": channels,
+            }
 
     except Exception as e:
         print(f"Error getting RAM info: {e}")
-
-    return info
+        return {
+            "total": psutil.virtual_memory().total // (1024 * 1024),
+            "type": "Unknown",
+            "speed": 0,
+            "channels": 1,
+        }
 
 
 def get_gpus_info() -> List[Dict]:
-    """Get detailed information for all available GPUs."""
+    """Get GPU information."""
     gpus = []
+
     try:
-        # Try NVIDIA GPUs first
+        # Try NVIDIA-SMI first
+        import pynvml
+
         pynvml.nvmlInit()
-        device_count = pynvml.nvmlDeviceGetCount()
 
-        for i in range(device_count):
-            handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            name = pynvml.nvmlDeviceGetName(handle).decode("utf-8")
-            compute_cap = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
+        try:
+            device_count = pynvml.nvmlDeviceGetCount()
+            for i in range(device_count):
+                handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+                info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                name = pynvml.nvmlDeviceGetName(handle).decode("utf-8")
 
-            # Determine VRAM type based on GPU model
-            vram_type = "GDDR6"
-            if any(x in name for x in ["3090", "4090", "4080", "4070"]):
-                vram_type = "GDDR6X"
-            elif "A100" in name or "H100" in name:
-                vram_type = "HBM2e"
+                # Get PCIe info
+                pcie_info = pynvml.nvmlDeviceGetMaxPcieLinkGeneration(handle)
+                pcie_width = pynvml.nvmlDeviceGetMaxPcieLinkWidth(handle)
 
-            # Estimate CUDA cores based on compute capability and SM count
-            attrs = pynvml.nvmlDeviceGetAttributes(handle)
-            sm_count = attrs.multiprocessorCount
-            cores_per_sm = {
-                (8, 6): 128,  # Ampere
-                (8, 9): 128,  # Ada Lovelace
-                (9, 0): 128,  # Hopper
-            }.get((compute_cap[0], compute_cap[1]), 64)
+                # Get clocks
+                graphics_clock = pynvml.nvmlDeviceGetClockInfo(
+                    handle, pynvml.NVML_CLOCK_GRAPHICS
+                )
+                memory_clock = pynvml.nvmlDeviceGetClockInfo(
+                    handle, pynvml.NVML_CLOCK_MEM
+                )
 
-            cuda_cores = sm_count * cores_per_sm
-            tensor_cores = (
-                sm_count * 4
-            )  # Most modern NVIDIA GPUs have 4 tensor cores per SM
-
-            # Get PCIe info
-            pcie_info = pynvml.nvmlDeviceGetMaxPcieLinkGeneration(handle)
-            pcie_width = pynvml.nvmlDeviceGetMaxPcieLinkWidth(handle)
-
-            gpus.append(
-                {
+                gpu = {
                     "name": name,
                     "vram_size": info.total // (1024 * 1024),  # Convert to MB
-                    "vram_type": vram_type,
-                    "tensor_cores": tensor_cores,
-                    "cuda_cores": cuda_cores,
-                    "compute_capability": f"{compute_cap[0]}.{compute_cap[1]}",
-                    "pcie_gen": pcie_info,
+                    "vram_type": (
+                        "GDDR6X" if "RTX" in name else "GDDR6"
+                    ),  # Assumption based on RTX series
+                    "pcie_generation": f"PCIe {pcie_info}.0",
                     "pcie_width": f"x{pcie_width}",
-                    "index": i,
+                    "core_clock": graphics_clock,
+                    "memory_clock": memory_clock,
                 }
-            )
 
-        pynvml.nvmlShutdown()
-    except Exception:
-        pass
+                # Try to get compute capability
+                try:
+                    major, minor = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
+                    gpu["compute_capability"] = f"{major}.{minor}"
+                except pynvml.NVMLError:
+                    pass
+
+                gpus.append(gpu)
+        except Exception as e:
+            print(f"Error getting NVIDIA GPU info: {e}")
+
+    except ImportError:
+        print("pynvml not available")
+    except Exception as e:
+        print(f"Error initializing NVIDIA detection: {e}")
+
+    # If no GPUs found through NVIDIA-SMI, try Windows WMI
+    if not gpus and platform.system() == "Windows":
+        try:
+            import wmi
+
+            w = wmi.WMI()
+            for gpu in w.Win32_VideoController():
+                if gpu.AdapterRAM:  # Only include GPUs with memory
+                    gpus.append(
+                        {
+                            "name": gpu.Name,
+                            "vram_size": gpu.AdapterRAM
+                            // (1024 * 1024),  # Convert to MB
+                            "vram_type": "GDDR6X" if "RTX" in gpu.Name else "GDDR6",
+                            "pcie_generation": "PCIe 4.0",  # Default for modern GPUs
+                            "pcie_width": "x16",
+                        }
+                    )
+        except Exception as e:
+            print(f"Error getting GPU info through WMI: {e}")
 
     return gpus
 
@@ -263,94 +296,89 @@ def get_npu_info() -> Optional[Dict]:
 
 
 def get_firmware_info() -> Dict:
-    """Get firmware and version information."""
+    """Get firmware and system information."""
     info = {
-        "bios_version": "Unknown",
+        "os_name": platform.system(),
+        "os_version": platform.version(),
+        "os_kernel": platform.release(),
         "bios_vendor": "Unknown",
+        "bios_version": "Unknown",
         "bios_release_date": "Unknown",
         "cpu_microcode": "Unknown",
-        "os_name": distro.name() if platform.system() == "Linux" else platform.system(),
-        "os_version": (
-            distro.version() if platform.system() == "Linux" else platform.version()
-        ),
-        "os_kernel": platform.release(),
-        "ollama_version": "Unknown",
+        "ollama_version": get_ollama_version(),
     }
 
     try:
-        # Get OS info
         if platform.system() == "Windows":
-            # Get BIOS info using wmic
-            proc = subprocess.run(
-                [
-                    "wmic",
-                    "bios",
-                    "get",
-                    "SMBIOSBIOSVersion,Manufacturer,ReleaseDate",
-                    "/format:csv",
-                ],
-                capture_output=True,
-                text=True,
-            )
-            if proc.returncode == 0:
-                lines = [
-                    line.strip() for line in proc.stdout.split("\n") if line.strip()
-                ]
-                if len(lines) > 1:  # Skip header
-                    try:
-                        parts = lines[1].split(",")
-                        if len(parts) >= 4:  # Node,Version,Vendor,Date
-                            info["bios_version"] = parts[1]
-                            info["bios_vendor"] = parts[2]
-                            info["bios_release_date"] = parts[3]
-                    except Exception:
-                        pass  # Keep defaults if parsing fails
+            import wmi
 
-        elif platform.system() == "Linux":
-            try:
-                # Try to get BIOS info from dmidecode
-                proc = subprocess.run(
-                    ["sudo", "dmidecode", "-t", "bios"],
-                    capture_output=True,
-                    text=True,
+            w = wmi.WMI()
+
+            # Get BIOS info
+            for bios in w.Win32_BIOS():
+                info["bios_vendor"] = (
+                    bios.Manufacturer if bios.Manufacturer else "Unknown"
                 )
-                if proc.returncode == 0:
-                    for line in proc.stdout.splitlines():
-                        line = line.strip()
-                        if "Version:" in line:
-                            info["bios_version"] = line.split("Version:")[-1].strip()
-                        elif "Vendor:" in line:
-                            info["bios_vendor"] = line.split("Vendor:")[-1].strip()
-                        elif "Release Date:" in line:
-                            info["bios_release_date"] = line.split("Release Date:")[
-                                -1
-                            ].strip()
-            except Exception:
-                pass  # Keep defaults if dmidecode fails
+                info["bios_version"] = bios.Version if bios.Version else "Unknown"
+                if bios.ReleaseDate:
+                    try:
+                        # Convert WMI datetime to ISO format
+                        date = datetime.strptime(
+                            bios.ReleaseDate.split(".")[0], "%Y%m%d%H%M%S"
+                        )
+                        info["bios_release_date"] = date.isoformat()
+                    except ValueError:
+                        info["bios_release_date"] = bios.ReleaseDate
 
+            # Get baseboard info for additional details
+            for board in w.Win32_BaseBoard():
+                if not info["bios_vendor"] or info["bios_vendor"] == "Unknown":
+                    info["bios_vendor"] = (
+                        board.Manufacturer if board.Manufacturer else "Unknown"
+                    )
+
+            # Try to get CPU microcode version
             try:
-                # Get CPU microcode version
+                reg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+                key = winreg.OpenKey(
+                    reg, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+                )
+                info["cpu_microcode"] = str(
+                    winreg.QueryValueEx(key, "Update Revision")[0]
+                )
+            except Exception:
+                pass
+
+        else:
+            # Linux implementation
+            try:
+                # Get BIOS info using dmidecode
+                dmidecode_output = subprocess.check_output(
+                    ["dmidecode", "-t", "bios"], universal_newlines=True
+                )
+                for line in dmidecode_output.split("\n"):
+                    if "Vendor:" in line:
+                        info["bios_vendor"] = line.split(":")[1].strip()
+                    elif "Version:" in line:
+                        info["bios_version"] = line.split(":")[1].strip()
+                    elif "Release Date:" in line:
+                        date_str = line.split(":")[1].strip()
+                        try:
+                            date = datetime.strptime(date_str, "%m/%d/%Y")
+                            info["bios_release_date"] = date.isoformat()
+                        except ValueError:
+                            info["bios_release_date"] = date_str
+
+                # Try to get CPU microcode version
                 proc = subprocess.run(
                     ["grep", "microcode", "/proc/cpuinfo"],
                     capture_output=True,
                     text=True,
                 )
-                if proc.returncode == 0:
-                    info["cpu_microcode"] = proc.stdout.strip().split(":")[-1].strip()
+                if proc.returncode == 0 and proc.stdout:
+                    info["cpu_microcode"] = proc.stdout.split(":")[1].strip()
             except Exception:
                 pass
-
-        # Try to get Ollama version
-        try:
-            proc = subprocess.run(
-                ["ollama", "--version"],
-                capture_output=True,
-                text=True,
-            )
-            if proc.returncode == 0:
-                info["ollama_version"] = proc.stdout.strip()
-        except Exception:
-            pass
 
     except Exception as e:
         print(f"Error getting firmware info: {e}")
@@ -368,3 +396,13 @@ def get_hardware_info() -> Dict:
         "total_memory": psutil.virtual_memory().total // (1024 * 1024),  # Convert to MB
         "firmware": get_firmware_info(),
     }
+
+
+def get_ollama_version() -> str:
+    try:
+        proc = subprocess.run(["ollama", "--version"], capture_output=True, text=True)
+        if proc.returncode == 0:
+            return proc.stdout.strip()
+    except Exception:
+        pass
+    return "Unknown"
