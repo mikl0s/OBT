@@ -122,6 +122,8 @@ class HardwareInfo(BaseModel):
     gpu: Optional[GPUInfo] = Field(None, description="GPU information if available")
     npu: Optional[NPUInfo] = Field(None, description="NPU information if available")
     total_memory: int = Field(..., description="Total system memory in MB")
+    ram: Dict = Field(..., description="Detailed RAM information")
+    firmware: Dict = Field(..., description="Firmware and version information")
 
 
 class BenchmarkConfig(BaseModel):
@@ -214,6 +216,8 @@ async def get_hardware_info() -> HardwareInfo:
                 features=[],
             ),
             total_memory=1024,  # 1GB in MB
+            ram={},
+            firmware={},
         )
 
 
