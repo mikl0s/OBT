@@ -63,6 +63,7 @@ Get-GitHubFile -FileName "requirements.txt" -TargetPath (Join-Path $installPath 
 Get-GitHubFile -FileName "start.ps1" -TargetPath (Join-Path $installPath "start.ps1")
 Get-GitHubFile -FileName "main.py" -TargetPath (Join-Path $installPath "main.py")
 Get-GitHubFile -FileName "hardware_info.py" -TargetPath (Join-Path $installPath "hardware_info.py")
+Get-GitHubFile -FileName "show_hardware_info.py" -TargetPath (Join-Path $installPath "show_hardware_info.py")
 
 # Check Python installation
 Write-ColorOutput "Blue" "Checking Python installation..."
