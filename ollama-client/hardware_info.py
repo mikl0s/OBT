@@ -102,19 +102,40 @@ def get_ram_info() -> Dict[str, Any]:
 
             if physical_memory:
                 info["type"] = "DDR4"  # Default to DDR4 if not detected
-                info["speed"] = (
-                    int(physical_memory[0].Speed) if physical_memory[0].Speed else None
-                )
+
+                # Get speed from first module, ensuring it's an integer
+                try:
+                    speed = physical_memory[0].Speed
+                    info["speed"] = (
+                        int(speed) if speed and str(speed).isdigit() else None
+                    )
+                except (ValueError, TypeError, AttributeError):
+                    info["speed"] = None
+
                 info["channels"] = len(physical_memory)
 
                 for i, mem in enumerate(physical_memory):
                     try:
-                        capacity = int(mem.Capacity) if mem.Capacity else 0
+                        # Convert capacity to integer, handling potential string values
+                        capacity_str = (
+                            str(mem.Capacity).strip() if mem.Capacity else "0"
+                        )
+                        if not capacity_str.isdigit():
+                            continue
+
+                        capacity = int(capacity_str)
+                        if capacity <= 0:
+                            continue
+
+                        # Convert speed to integer, handling potential string values
+                        speed_str = str(mem.Speed).strip() if mem.Speed else "0"
+                        speed = int(speed_str) if speed_str.isdigit() else None
+
                         module = {
                             "size": capacity // (1024 * 1024),  # Convert to MB
                             "capacity": capacity
                             // (1024 * 1024),  # For backwards compatibility
-                            "speed": int(mem.Speed) if mem.Speed else None,
+                            "speed": speed,
                             "manufacturer": (
                                 mem.Manufacturer.strip()
                                 if mem.Manufacturer
@@ -127,7 +148,7 @@ def get_ram_info() -> Dict[str, Any]:
                             "type": "DDR4",  # Add type field
                         }
                         info["modules"].append(module)
-                    except (ValueError, TypeError) as e:
+                    except (ValueError, TypeError, AttributeError) as e:
                         print(f"Error processing memory module {i}: {e}")
                         continue
 
@@ -135,21 +156,23 @@ def get_ram_info() -> Dict[str, Any]:
                 try:
                     memory_array = c.Win32_PhysicalMemoryArray()
                     if memory_array and memory_array[0].MemoryType:
-                        spd_type = int(memory_array[0].MemoryType)
-                        type_map = {
-                            20: "DDR",
-                            21: "DDR2",
-                            24: "DDR3",
-                            26: "DDR4",
-                            30: "LPDDR4",
-                            34: "DDR5",
-                            35: "LPDDR5",
-                        }
-                        detected_type = type_map.get(spd_type)
-                        if detected_type:
-                            info["type"] = detected_type
-                            for module in info["modules"]:
-                                module["type"] = detected_type
+                        spd_type_str = str(memory_array[0].MemoryType).strip()
+                        if spd_type_str.isdigit():
+                            spd_type = int(spd_type_str)
+                            type_map = {
+                                20: "DDR",
+                                21: "DDR2",
+                                24: "DDR3",
+                                26: "DDR4",
+                                30: "LPDDR4",
+                                34: "DDR5",
+                                35: "LPDDR5",
+                            }
+                            detected_type = type_map.get(spd_type)
+                            if detected_type:
+                                info["type"] = detected_type
+                                for module in info["modules"]:
+                                    module["type"] = detected_type
                 except Exception as e:
                     print(f"Error detecting memory type: {e}")
 
