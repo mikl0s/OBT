@@ -3,17 +3,28 @@
 This is a lightweight client that runs on the same machine as Ollama and communicates with the OBT server. It provides:
 
 1. Model listing and synchronization with OBT
-2. Hardware information reporting (CPU, GPU, memory)
+2. Hardware information reporting (CPU, GPU, memory, NPU)
 3. Benchmark execution and performance monitoring
 4. WebSocket-based streaming for model responses
 5. Configurable connection to both Ollama and OBT server
 
 ## Features
 
-### Hardware Monitoring
-- Automatic detection of CPU and GPU resources
+### Hardware Detection
+- Cross-platform support (Windows, Linux, macOS)
+- Automatic detection of CPU and GPU resources:
+  - NVIDIA GPUs with CUDA support
+  - AMD GPUs with ROCm (Linux)
+  - Apple Neural Engine (macOS)
+  - Intel/AMD NPUs via DirectML (Windows)
+  - Other NPUs (Intel Movidius, AMD Ryzen AI, etc.)
 - Real-time hardware utilization tracking
-- GPU memory and usage monitoring
+- GPU/NPU capabilities:
+  - Memory size and usage
+  - Compute capabilities
+  - Driver versions
+  - Tensor Core support
+  - FP16/BF16 support
 - System memory and CPU usage reporting
 
 ### Benchmarking
@@ -26,24 +37,44 @@ This is a lightweight client that runs on the same machine as Ollama and communi
 - Multiple iteration support
 - Automatic result reporting to OBT server
 
-## Setup
+## Quick Start
 
-1. Create a virtual environment:
+### Windows
+```powershell
+# Download and run the installer (requires admin)
+irm https://raw.githubusercontent.com/mikl0s/OBT/main/ollama-client/install.ps1 | iex
+```
+
+### macOS/Linux
 ```bash
+# Clone the repository
+git clone https://github.com/mikl0s/OBT.git
+cd OBT/ollama-client
+
+# Create and activate virtual environment
 python -m venv venv
-source venv/bin/activate
-```
+source venv/bin/activate  # On macOS/Linux
+./venv/Scripts/activate   # On Windows
 
-2. Install dependencies:
-```bash
+# Install dependencies
 pip install -r requirements.txt
-```
 
-3. Configure environment:
-```bash
+# Configure environment
 cp .env.example .env
 # Edit .env with your OBT server URL
 ```
+
+### Test Hardware Detection
+To verify what hardware is detected on your system:
+```bash
+python show_hardware_info.py
+```
+This will display detailed information about your:
+- CPU (model, cores, frequency)
+- Memory (total, available)
+- GPUs (NVIDIA, AMD)
+- NPUs (Apple Neural Engine, Intel/AMD accelerators)
+- System information
 
 ## Running
 

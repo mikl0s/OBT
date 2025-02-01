@@ -18,7 +18,6 @@ websockets>=12.0
 wmi>=1.5.1; platform_system == "Windows"
 pywin32>=306; platform_system == "Windows"
 pefile>=2023.2.7; platform_system == "Windows"  # Optional: for additional version detection
-directml>=1.11.0; platform_system == "Windows"  # Optional: for Intel/AMD NPU detection
 
 # Linux-specific dependencies
 nvidia-ml-py>=12.535.108; platform_system == "Linux"  # For NVIDIA GPU detection

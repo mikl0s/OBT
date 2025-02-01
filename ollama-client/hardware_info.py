@@ -6,9 +6,11 @@ import platform
 import re
 import shutil
 import subprocess
+import tempfile
+import time
 import winreg
 from datetime import datetime
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import cpuinfo
 import psutil
@@ -304,6 +306,171 @@ def get_gpus_info() -> List[Dict]:
     return gpus
 
 
+def get_dxdiag_info() -> Dict[str, Any]:
+    """Get GPU and DirectX information from dxdiag on Windows."""
+    if platform.system() != "Windows":
+        return {}
+
+    try:
+        # Create a temporary file for dxdiag output
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as temp:
+            temp_path = temp.name
+
+        # Run dxdiag and wait for it to complete
+        subprocess.run(["dxdiag", "/t", temp_path], check=True)
+        time.sleep(1)  # Give it a moment to finish writing
+
+        # Read the dxdiag output
+        with open(temp_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Clean up temp file
+        os.unlink(temp_path)
+
+        info = {
+            "gpus": [],
+            "directx_version": None,
+            "directx_feature_levels": [],
+            "wddm_version": None,
+        }
+
+        # Parse DirectX version
+        dx_match = re.search(r"DirectX Version: (DirectX \d+)", content)
+        if dx_match:
+            info["directx_version"] = dx_match.group(1)
+
+        # Find all Display Device sections
+        gpu_sections = re.finditer(
+            r"Card name: (.*?)(?=\n.*?(?:Card name:|$))", content, re.DOTALL
+        )
+
+        for gpu in gpu_sections:
+            section = gpu.group(0)
+            gpu_info = {
+                "name": None,
+                "manufacturer": None,
+                "chip_type": None,
+                "device_type": None,
+                "device_key": None,
+                "device_status": None,
+                "dedicated_memory": None,
+                "shared_memory": None,
+                "feature_levels": None,
+                "driver_model": None,
+                "driver_version": None,
+                "driver_date": None,
+                "hardware_scheduling": False,
+                "virtualization": None,
+                "compute_preemption": None,
+                "graphics_preemption": None,
+                "hdr_support": None,
+                "display_topology": None,
+                "dxva2_modes": [],
+                "video_memory": None,
+            }
+
+            # Extract GPU details
+            name_match = re.search(r"Card name: (.+)", section)
+            if name_match:
+                gpu_info["name"] = name_match.group(1).strip()
+
+            manufacturer_match = re.search(r"Manufacturer: (.+)", section)
+            if manufacturer_match:
+                gpu_info["manufacturer"] = manufacturer_match.group(1).strip()
+
+            chip_match = re.search(r"Chip type: (.+)", section)
+            if chip_match:
+                gpu_info["chip_type"] = chip_match.group(1).strip()
+
+            device_type_match = re.search(r"Device Type: (.+)", section)
+            if device_type_match:
+                gpu_info["device_type"] = device_type_match.group(1).strip()
+
+            device_key_match = re.search(r"Device Key: (.+)", section)
+            if device_key_match:
+                gpu_info["device_key"] = device_key_match.group(1).strip()
+
+            status_match = re.search(r"Device Status: (.+)", section)
+            if status_match:
+                gpu_info["device_status"] = status_match.group(1).strip()
+
+            # Memory information
+            dedicated_match = re.search(r"Dedicated Memory: (\d+)", section)
+            if dedicated_match:
+                gpu_info["dedicated_memory"] = int(dedicated_match.group(1))
+
+            shared_match = re.search(r"Shared Memory: (\d+)", section)
+            if shared_match:
+                gpu_info["shared_memory"] = int(shared_match.group(1))
+
+            total_mem_match = re.search(r"Display Memory: (\d+)", section)
+            if total_mem_match:
+                gpu_info["video_memory"] = int(total_mem_match.group(1))
+
+            # DirectX features
+            feature_match = re.search(r"Feature Levels: (.+)", section)
+            if feature_match:
+                gpu_info["feature_levels"] = [
+                    x.strip() for x in feature_match.group(1).split(",")
+                ]
+
+            model_match = re.search(r"Driver Model: (.+)", section)
+            if model_match:
+                gpu_info["driver_model"] = model_match.group(1).strip()
+                wddm_match = re.search(r"WDDM (\d+\.\d+)", model_match.group(1))
+                if wddm_match:
+                    info["wddm_version"] = wddm_match.group(1)
+
+            driver_match = re.search(r"Driver Version: (.+)", section)
+            if driver_match:
+                gpu_info["driver_version"] = driver_match.group(1).strip()
+
+            date_match = re.search(r"Driver Date/Size: ([^,]+)", section)
+            if date_match:
+                gpu_info["driver_date"] = date_match.group(1).strip()
+
+            # Advanced features
+            sched_match = re.search(r"Hardware Scheduling: .*Enabled:(\w+)", section)
+            if sched_match:
+                gpu_info["hardware_scheduling"] = sched_match.group(1).lower() == "true"
+
+            virt_match = re.search(r"Virtualization: (.+)", section)
+            if virt_match:
+                gpu_info["virtualization"] = virt_match.group(1).strip()
+
+            compute_match = re.search(r"Compute Preemption: (.+)", section)
+            if compute_match:
+                gpu_info["compute_preemption"] = compute_match.group(1).strip()
+
+            graphics_match = re.search(r"Graphics Preemption: (.+)", section)
+            if graphics_match:
+                gpu_info["graphics_preemption"] = graphics_match.group(1).strip()
+
+            hdr_match = re.search(r"HDR Support: (.+)", section)
+            if hdr_match:
+                gpu_info["hdr_support"] = hdr_match.group(1).strip()
+
+            topology_match = re.search(r"Display Topology: (.+)", section)
+            if topology_match:
+                gpu_info["display_topology"] = topology_match.group(1).strip()
+
+            # Video acceleration features
+            dxva2_match = re.search(
+                r"DXVA2 Modes: (.+?)(?=\n\s+[A-Za-z]|$)", section, re.DOTALL
+            )
+            if dxva2_match:
+                modes = re.findall(r"DXVA2_Mode(\w+)", dxva2_match.group(1))
+                gpu_info["dxva2_modes"] = modes
+
+            info["gpus"].append(gpu_info)
+
+        return info
+
+    except Exception as e:
+        print(f"Error getting dxdiag info: {e}")
+        return {}
+
+
 def get_npu_info() -> Dict:
     """Get NPU (Neural Processing Unit) information if available."""
     info = {
@@ -315,6 +482,8 @@ def get_npu_info() -> Dict:
         "driver_version": None,
         "tensor_cores": False,
         "fp16_support": False,
+        "directx": None,
+        "video_acceleration": None,
     }
 
     system = platform.system()
@@ -355,6 +524,31 @@ def get_npu_info() -> Dict:
             )
             info["tensor_cores"] = float(info["compute_capability"]) >= 7.0
             info["fp16_support"] = float(info["compute_capability"]) >= 7.0
+
+            # Get DirectX info for Windows
+            if system == "Windows":
+                dx_info = get_dxdiag_info()
+                if dx_info and dx_info["gpus"]:
+                    # Find matching GPU in dxdiag output
+                    for gpu in dx_info["gpus"]:
+                        if info["name"] in gpu["name"]:
+                            info["directx"] = {
+                                "version": dx_info["directx_version"],
+                                "feature_levels": gpu["feature_levels"],
+                                "driver_model": gpu["driver_model"],
+                                "hardware_scheduling": gpu["hardware_scheduling"],
+                                "compute_preemption": gpu["compute_preemption"],
+                                "graphics_preemption": gpu["graphics_preemption"],
+                                "virtualization": gpu["virtualization"],
+                                "device_type": gpu["device_type"],
+                            }
+                            # Add video acceleration capabilities
+                            if gpu["dxva2_modes"]:
+                                info["video_acceleration"] = {
+                                    "dxva2_modes": gpu["dxva2_modes"],
+                                    "hdr_support": gpu["hdr_support"],
+                                }
+                            break
     except Exception as e:
         print(f"Error getting NVIDIA NPU info: {e}")
 
@@ -377,35 +571,57 @@ def get_npu_info() -> Dict:
         except Exception as e:
             print(f"Error getting AMD GPU info: {e}")
 
-    # Check for DirectML-compatible devices (Intel/AMD NPUs) on Windows
+    # Check for Intel/AMD GPUs on Windows using dxdiag
     if info["type"] == "none" and system == "Windows":
         try:
-            import torch_directml
+            dx_info = get_dxdiag_info()
+            if dx_info and dx_info["gpus"]:
+                gpu = dx_info["gpus"][0]  # Use primary GPU
+                info["type"] = "gpu"
+                info["name"] = gpu["name"]
+                info["memory"] = gpu["video_memory"]  # Use total video memory
+                info["driver_version"] = gpu["driver_version"]
 
-            device_count = torch_directml.device_count()
-            if device_count > 0:
-                info["type"] = "directml"
-                info["name"] = torch_directml.device_name(0)
-                # Try to get memory info from WMI as fallback
-                try:
-                    import wmi
+                # Check for known AI accelerators
+                name_lower = gpu["name"].lower()
+                if "neural" in name_lower or "npu" in name_lower or "ai" in name_lower:
+                    info["type"] = "npu"
 
-                    c = wmi.WMI()
-                    for gpu in c.Win32_VideoController():
-                        if gpu.Name == info["name"]:
-                            info["memory"] = (
-                                int(gpu.AdapterRAM) // (1024 * 1024)
-                                if gpu.AdapterRAM
-                                else None
-                            )
-                            info["driver_version"] = gpu.DriverVersion
-                            break
-                except Exception:
-                    pass
-        except ImportError:
-            print("DirectML not installed, skipping Intel/AMD NPU detection")
+                # Add DirectX capabilities
+                info["directx"] = {
+                    "version": dx_info["directx_version"],
+                    "feature_levels": gpu["feature_levels"],
+                    "driver_model": gpu["driver_model"],
+                    "hardware_scheduling": gpu["hardware_scheduling"],
+                    "compute_preemption": gpu["compute_preemption"],
+                    "graphics_preemption": gpu["graphics_preemption"],
+                    "virtualization": gpu["virtualization"],
+                    "device_type": gpu["device_type"],
+                }
+
+                # Add video acceleration capabilities
+                if gpu["dxva2_modes"]:
+                    info["video_acceleration"] = {
+                        "dxva2_modes": gpu["dxva2_modes"],
+                        "hdr_support": gpu["hdr_support"],
+                    }
+
+                # Infer capabilities from GPU and driver features
+                if gpu["feature_levels"] and any(
+                    level.startswith("12_") for level in gpu["feature_levels"]
+                ):
+                    info["fp16_support"] = True
+
+                # Check for NPU capabilities based on device type and features
+                if (
+                    gpu["device_type"] == "Full Device (POST)"
+                    and gpu["hardware_scheduling"]
+                    and gpu["compute_preemption"] == "Dispatch"
+                ):
+                    info["type"] = "npu"
+
         except Exception as e:
-            print(f"Error getting DirectML device info: {e}")
+            print(f"Error getting Windows GPU info: {e}")
 
     # Check for Apple Neural Engine on M1/M2 Macs
     if info["type"] == "none" and system == "Darwin":
@@ -449,6 +665,82 @@ def get_npu_info() -> Dict:
                     info["name"] = "Qualcomm Hexagon DSP"
         except Exception as e:
             print(f"Error detecting Linux NPUs: {e}")
+
+    return info
+
+
+def get_directml_info() -> Dict[str, Any]:
+    """Get DirectML information from Windows Registry and DLL checks."""
+    info = {"available": False, "version": None, "capabilities": [], "dll_path": None}
+
+    if platform.system() != "Windows":
+        return info
+
+    try:
+        # Check Windows Registry for DirectML
+        import winreg
+
+        try:
+            key = winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\DirectML"
+            )
+            info["version"] = winreg.QueryValueEx(key, "Version")[0]
+            info["available"] = True
+            winreg.CloseKey(key)
+        except WindowsError:
+            # Try checking System32 for DirectML DLL directly
+            dll_path = os.path.join(
+                os.environ["SystemRoot"], "System32", "DirectML.dll"
+            )
+            if os.path.exists(dll_path):
+                info["available"] = True
+                info["dll_path"] = dll_path
+                # Try to get version from DLL
+                try:
+                    import pefile
+
+                    pe = pefile.PE(dll_path)
+                    info["version"] = (
+                        f"{pe.FileInfo[0].StringTable[0].entries[b'FileVersion'].decode()}"
+                    )
+                except Exception:
+                    pass
+
+        # Check for DirectML device capabilities
+        if info["available"]:
+            import wmi
+
+            c = wmi.WMI()
+            for gpu in c.Win32_VideoController():
+                driver_path = gpu.DriverPath if hasattr(gpu, "DriverPath") else None
+                if driver_path and "directml" in driver_path.lower():
+                    # Device supports DirectML
+                    caps = []
+
+                    # Check for known DirectML capabilities based on driver and device
+                    if (
+                        gpu.AdapterDACType
+                        and "integrated" not in gpu.AdapterDACType.lower()
+                    ):
+                        caps.append("hardware_acceleration")
+
+                    # Intel GPUs usually support these
+                    if "intel" in gpu.Name.lower():
+                        caps.extend(["fp16", "int8"])
+                        if "arc" in gpu.Name.lower() or "xe" in gpu.Name.lower():
+                            caps.extend(["dp4a", "neural_network"])
+
+                    # AMD GPUs
+                    elif "amd" in gpu.Name.lower() or "radeon" in gpu.Name.lower():
+                        caps.extend(["fp16"])
+                        if "rdna" in gpu.Name.lower() or "navi" in gpu.Name.lower():
+                            caps.extend(["neural_network"])
+
+                    info["capabilities"] = list(set(caps))  # Remove duplicates
+                    break
+
+    except Exception as e:
+        print(f"Error getting DirectML info: {e}")
 
     return info
 
