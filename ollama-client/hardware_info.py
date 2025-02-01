@@ -102,30 +102,40 @@ def get_ram_info() -> Dict[str, Any]:
 
             if physical_memory:
                 info["type"] = "DDR4"  # Default to DDR4 if not detected
-                info["speed"] = physical_memory[0].Speed
+                info["speed"] = (
+                    int(physical_memory[0].Speed) if physical_memory[0].Speed else None
+                )
                 info["channels"] = len(physical_memory)
 
                 for i, mem in enumerate(physical_memory):
-                    module = {
-                        "size": mem.Capacity // (1024 * 1024),  # Convert to MB
-                        "capacity": mem.Capacity
-                        // (1024 * 1024),  # For backwards compatibility
-                        "speed": mem.Speed,
-                        "manufacturer": (
-                            mem.Manufacturer.strip() if mem.Manufacturer else "Unknown"
-                        ),
-                        "part_number": (
-                            mem.PartNumber.strip() if mem.PartNumber else "Unknown"
-                        ),
-                        "location": f"DIMM{i}",  # Add location field
-                        "type": "DDR4",  # Add type field
-                    }
-                    info["modules"].append(module)
+                    try:
+                        capacity = int(mem.Capacity) if mem.Capacity else 0
+                        module = {
+                            "size": capacity // (1024 * 1024),  # Convert to MB
+                            "capacity": capacity
+                            // (1024 * 1024),  # For backwards compatibility
+                            "speed": int(mem.Speed) if mem.Speed else None,
+                            "manufacturer": (
+                                mem.Manufacturer.strip()
+                                if mem.Manufacturer
+                                else "Unknown"
+                            ),
+                            "part_number": (
+                                mem.PartNumber.strip() if mem.PartNumber else "Unknown"
+                            ),
+                            "location": f"DIMM{i}",  # Add location field
+                            "type": "DDR4",  # Add type field
+                        }
+                        info["modules"].append(module)
+                    except (ValueError, TypeError) as e:
+                        print(f"Error processing memory module {i}: {e}")
+                        continue
 
                 # Try to detect memory type from SPD data
                 try:
-                    spd_type = c.Win32_PhysicalMemoryArray()[0].MemoryType
-                    if spd_type:
+                    memory_array = c.Win32_PhysicalMemoryArray()
+                    if memory_array and memory_array[0].MemoryType:
+                        spd_type = int(memory_array[0].MemoryType)
                         type_map = {
                             20: "DDR",
                             21: "DDR2",
