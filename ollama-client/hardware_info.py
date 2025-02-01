@@ -83,109 +83,225 @@ def get_cpu_info() -> Dict:
     }
 
 
-def get_ram_info() -> Dict:
+def get_ram_info() -> Dict[str, Any]:
     """Get RAM information."""
+    info = {
+        "total": psutil.virtual_memory().total // (1024 * 1024),  # Convert to MB
+        "type": "Unknown",
+        "speed": None,
+        "channels": None,
+        "modules": [],
+    }
+
     try:
         if platform.system() == "Windows":
             import wmi
 
-            w = wmi.WMI()
-            total_memory = 0
-            ram_type = "Unknown"
-            speed = 0
-            channels = 1  # Default to single channel
+            c = wmi.WMI()
+            physical_memory = c.Win32_PhysicalMemory()
 
-            # Get memory modules
-            modules = []
-            module_locations = set()
-            for mem in w.Win32_PhysicalMemory():
-                total_memory += int(mem.Capacity) if mem.Capacity else 0
-                if mem.Speed:
-                    speed = max(speed, int(mem.Speed))
-                if mem.SMBIOSMemoryType:
-                    # DDR4 is type 26
-                    if mem.SMBIOSMemoryType == 26:
-                        ram_type = "DDR4"
-                    # DDR5 is type 30
-                    elif mem.SMBIOSMemoryType == 30:
-                        ram_type = "DDR5"
+            if physical_memory:
+                info["type"] = "DDR4"  # Default to DDR4 if not detected
+                info["speed"] = physical_memory[0].Speed
+                info["channels"] = len(physical_memory)
 
-                # Track unique bank locations to determine channel configuration
-                if mem.BankLabel:
-                    module_locations.add(mem.BankLabel)
-
-                modules.append(
-                    {
-                        "capacity": (
-                            int(mem.Capacity) // (1024 * 1024) if mem.Capacity else 0
-                        ),  # Convert to MB
-                        "speed": int(mem.Speed) if mem.Speed else 0,
+                for i, mem in enumerate(physical_memory):
+                    module = {
+                        "size": mem.Capacity // (1024 * 1024),  # Convert to MB
+                        "capacity": mem.Capacity
+                        // (1024 * 1024),  # For backwards compatibility
+                        "speed": mem.Speed,
                         "manufacturer": (
-                            mem.Manufacturer if mem.Manufacturer else "Unknown"
+                            mem.Manufacturer.strip() if mem.Manufacturer else "Unknown"
                         ),
                         "part_number": (
                             mem.PartNumber.strip() if mem.PartNumber else "Unknown"
                         ),
+                        "location": f"DIMM{i}",  # Add location field
+                        "type": "DDR4",  # Add type field
                     }
-                )
+                    info["modules"].append(module)
 
-            # Determine channel configuration based on populated slots
-            # Most modern systems use dual-channel when 2 identical DIMMs are installed
-            if len(modules) >= 2 and modules[0]["capacity"] == modules[1]["capacity"]:
-                channels = 2  # Dual channel
+                # Try to detect memory type from SPD data
+                try:
+                    spd_type = c.Win32_PhysicalMemoryArray()[0].MemoryType
+                    if spd_type:
+                        type_map = {
+                            20: "DDR",
+                            21: "DDR2",
+                            24: "DDR3",
+                            26: "DDR4",
+                            30: "LPDDR4",
+                            34: "DDR5",
+                            35: "LPDDR5",
+                        }
+                        detected_type = type_map.get(spd_type)
+                        if detected_type:
+                            info["type"] = detected_type
+                            for module in info["modules"]:
+                                module["type"] = detected_type
+                except Exception as e:
+                    print(f"Error detecting memory type: {e}")
 
-            return {
-                "total": total_memory // (1024 * 1024),  # Convert to MB
-                "type": ram_type,
-                "speed": speed,
-                "channels": channels,
-                "modules": modules,
-            }
-        else:
-            # Linux implementation
-            total_memory = psutil.virtual_memory().total // (
-                1024 * 1024
-            )  # Convert to MB
-
-            # Try to get RAM type and speed from dmidecode
-            ram_type = "Unknown"
-            speed = 0
-            channels = 1
+        elif platform.system() == "Linux":
             try:
-                dmidecode_output = subprocess.check_output(
-                    ["dmidecode", "-t", "memory"], universal_newlines=True
+                result = subprocess.run(
+                    ["dmidecode", "-t", "memory"], capture_output=True, text=True
                 )
-                for line in dmidecode_output.split("\n"):
-                    if "Type:" in line and "Unknown" not in line:
-                        ram_type = line.split(":")[1].strip()
-                    elif "Speed:" in line and "Unknown" not in line:
-                        try:
-                            speed = int(line.split(":")[1].strip().split()[0])
-                        except (ValueError, IndexError):
-                            pass
-                    elif "Number Of Devices:" in line:
-                        try:
-                            channels = int(line.split(":")[1].strip())
-                        except (ValueError, IndexError):
-                            pass
-            except (subprocess.CalledProcessError, PermissionError):
-                pass
+                if result.returncode == 0:
+                    current_module = None
+                    modules = []
 
-            return {
-                "total": total_memory,
-                "type": ram_type,
-                "speed": speed,
-                "channels": channels,
-            }
+                    for line in result.stdout.splitlines():
+                        line = line.strip()
+
+                        if "Memory Device" in line and "Handle" in line:
+                            if current_module:
+                                modules.append(current_module)
+                            current_module = {
+                                "size": None,
+                                "capacity": None,
+                                "speed": None,
+                                "manufacturer": "Unknown",
+                                "part_number": "Unknown",
+                                "location": None,
+                                "type": None,
+                            }
+
+                        if current_module:
+                            if "Size:" in line:
+                                size_str = line.split(":")[1].strip()
+                                if "MB" in size_str:
+                                    size = int(size_str.replace("MB", "").strip())
+                                elif "GB" in size_str:
+                                    size = (
+                                        int(size_str.replace("GB", "").strip()) * 1024
+                                    )
+                                if size > 0:
+                                    current_module["size"] = size
+                                    current_module["capacity"] = size
+
+                            elif "Type:" in line and ":" in line:
+                                mem_type = line.split(":")[1].strip()
+                                if mem_type != "Unknown":
+                                    current_module["type"] = mem_type
+                                    info["type"] = mem_type
+
+                            elif "Speed:" in line:
+                                speed_str = line.split(":")[1].strip()
+                                if "MHz" in speed_str:
+                                    current_module["speed"] = int(
+                                        speed_str.replace("MHz", "").strip()
+                                    )
+
+                            elif "Manufacturer:" in line:
+                                manufacturer = line.split(":")[1].strip()
+                                if manufacturer != "Not Specified":
+                                    current_module["manufacturer"] = manufacturer
+
+                            elif "Part Number:" in line:
+                                part_number = line.split(":")[1].strip()
+                                if part_number != "Not Specified":
+                                    current_module["part_number"] = part_number
+
+                            elif "Locator:" in line:
+                                current_module["location"] = line.split(":")[1].strip()
+
+                    if current_module:
+                        modules.append(current_module)
+
+                    # Only add modules that have a size
+                    info["modules"] = [m for m in modules if m["size"] is not None]
+                    if info["modules"]:
+                        info["speed"] = max(
+                            m["speed"]
+                            for m in info["modules"]
+                            if m["speed"] is not None
+                        )
+                        info["channels"] = len(info["modules"])
+
+            except Exception as e:
+                print(f"Error getting Linux RAM info: {e}")
+
+        elif platform.system() == "Darwin":
+            try:
+                result = subprocess.run(
+                    ["system_profiler", "SPMemoryDataType"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    current_module = None
+                    modules = []
+
+                    for line in result.stdout.splitlines():
+                        line = line.strip()
+
+                        if "BANK" in line:
+                            if current_module:
+                                modules.append(current_module)
+                            current_module = {
+                                "size": None,
+                                "capacity": None,
+                                "speed": None,
+                                "manufacturer": "Unknown",
+                                "part_number": "Unknown",
+                                "location": line.strip(),
+                                "type": None,
+                            }
+
+                        if current_module:
+                            if "Size:" in line:
+                                size_str = line.split(":")[1].strip()
+                                if "GB" in size_str:
+                                    size = (
+                                        int(size_str.replace("GB", "").strip()) * 1024
+                                    )
+                                    current_module["size"] = size
+                                    current_module["capacity"] = size
+
+                            elif "Type:" in line:
+                                mem_type = line.split(":")[1].strip()
+                                current_module["type"] = mem_type
+                                info["type"] = mem_type
+
+                            elif "Speed:" in line:
+                                speed_str = line.split(":")[1].strip()
+                                if "MHz" in speed_str:
+                                    current_module["speed"] = int(
+                                        speed_str.replace("MHz", "").strip()
+                                    )
+
+                            elif "Manufacturer:" in line:
+                                current_module["manufacturer"] = line.split(":")[
+                                    1
+                                ].strip()
+
+                            elif "Part Number:" in line:
+                                current_module["part_number"] = line.split(":")[
+                                    1
+                                ].strip()
+
+                    if current_module:
+                        modules.append(current_module)
+
+                    # Only add modules that have a size
+                    info["modules"] = [m for m in modules if m["size"] is not None]
+                    if info["modules"]:
+                        info["speed"] = max(
+                            m["speed"]
+                            for m in info["modules"]
+                            if m["speed"] is not None
+                        )
+                        info["channels"] = len(info["modules"])
+
+            except Exception as e:
+                print(f"Error getting macOS RAM info: {e}")
 
     except Exception as e:
         print(f"Error getting RAM info: {e}")
-        return {
-            "total": psutil.virtual_memory().total // (1024 * 1024),
-            "type": "Unknown",
-            "speed": 0,
-            "channels": 1,
-        }
+
+    return info
 
 
 def get_gpus_info() -> List[Dict]:
