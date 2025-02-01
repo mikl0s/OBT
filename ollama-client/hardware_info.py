@@ -155,26 +155,28 @@ def get_ram_info() -> Dict[str, Any]:
                 # Try to detect memory type from SPD data
                 try:
                     memory_array = c.Win32_PhysicalMemoryArray()
-                    if memory_array and memory_array[0].MemoryType:
-                        spd_type_str = str(memory_array[0].MemoryType).strip()
-                        if spd_type_str.isdigit():
-                            spd_type = int(spd_type_str)
-                            type_map = {
-                                20: "DDR",
-                                21: "DDR2",
-                                24: "DDR3",
-                                26: "DDR4",
-                                30: "LPDDR4",
-                                34: "DDR5",
-                                35: "LPDDR5",
-                            }
-                            detected_type = type_map.get(spd_type)
-                            if detected_type:
-                                info["type"] = detected_type
-                                for module in info["modules"]:
-                                    module["type"] = detected_type
+                    if memory_array and len(memory_array) > 0:
+                        memory_type = getattr(memory_array[0], "MemoryType", None)
+                        if memory_type is not None:
+                            spd_type_str = str(memory_type).strip()
+                            if spd_type_str.isdigit():
+                                spd_type = int(spd_type_str)
+                                type_map = {
+                                    20: "DDR",
+                                    21: "DDR2",
+                                    24: "DDR3",
+                                    26: "DDR4",
+                                    30: "LPDDR4",
+                                    34: "DDR5",
+                                    35: "LPDDR5",
+                                }
+                                detected_type = type_map.get(spd_type)
+                                if detected_type:
+                                    info["type"] = detected_type
+                                    for module in info["modules"]:
+                                        module["type"] = detected_type
                 except Exception as e:
-                    print(f"Error detecting memory type: {e}")
+                    print(f"Error detecting memory type: {str(e)}")
 
         elif platform.system() == "Linux":
             try:
