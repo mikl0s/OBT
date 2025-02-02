@@ -27,6 +27,7 @@ export interface Prompt {
 	id: string;
 	name: string;
 	content: string;
+	selected: boolean;
 }
 
 export interface GPU {
@@ -127,7 +128,13 @@ function createBenchmarkStore() {
 				if (!response.ok) throw new Error('Failed to fetch prompts');
 				const data = await response.json();
 				// The API returns test suites, we want to flatten all prompts from all suites
-				const prompts = data.flatMap((suite) => suite.prompts);
+				// and add the selected property
+				const prompts = data.flatMap((suite) =>
+					suite.prompts.map((prompt) => ({
+						...prompt,
+						selected: false
+					}))
+				);
 				update((state) => ({ ...state, prompts, loading: false }));
 				return prompts;
 			} catch (error) {
@@ -142,9 +149,11 @@ function createBenchmarkStore() {
 				const response = await fetch(url);
 				if (!response.ok) throw new Error('Failed to fetch models');
 				const models = await response.json();
-				update((state) => ({ ...state, models, loading: false }));
+				console.log('Fetched models:', models); // Debug log
+				update((state) => ({ ...state, models: models || [], loading: false }));
 				return models;
 			} catch (error) {
+				console.error('Error fetching models:', error); // Debug log
 				update((state) => ({ ...state, error: error.message, loading: false }));
 				return [];
 			}
@@ -179,13 +188,13 @@ function createBenchmarkStore() {
 					: [...state.selectedModels, modelName]
 			}));
 		},
-		togglePrompt: (promptId: string) => {
-			update((state) => {
-				const newSelected = state.selectedPrompts.includes(promptId)
-					? state.selectedPrompts.filter((p) => p !== promptId)
-					: [...state.selectedPrompts, promptId];
-				return { ...state, selectedPrompts: newSelected };
-			});
+		togglePromptSelection: (promptId: string) => {
+			update((state) => ({
+				...state,
+				prompts: state.prompts.map((prompt) =>
+					prompt.id === promptId ? { ...prompt, selected: !prompt.selected } : prompt
+				)
+			}));
 		},
 		setGPUs: (gpus: GPU[]) => update((state) => ({ ...state, availableGPUs: gpus })),
 		setError: (error: string | null) => update((state) => ({ ...state, error })),

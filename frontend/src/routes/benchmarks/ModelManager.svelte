@@ -19,6 +19,7 @@
 	let newModelName = '';
 	let newModelPath = '';
 	let loading = false;
+	let hasClients = false;
 
 	async function addModel() {
 		if (!newModelName.trim() || !newModelPath.trim()) {
@@ -68,6 +69,15 @@
 
 	onMount(async () => {
 		try {
+			const response = await fetch('/api/v1/hardware');
+			const data = await response.json();
+			hasClients = Object.keys(data).length > 0;
+		} catch (error) {
+			console.error('Failed to check for active clients:', error);
+			hasClients = false;
+		}
+
+		try {
 			const response = await fetch('/api/v1/models');
 			const models = await response.json();
 			$selectedModels = models;
@@ -81,19 +91,42 @@
 <Card>
 	<h2 class="mb-4 text-xl font-semibold">Models</h2>
 
-	<div class="mb-6">
+	{#if !hasClients}
+		<div class="mb-4 rounded-lg bg-blue-50 p-4 text-sm text-blue-800" role="alert">
+			<span class="font-medium">No active clients available.</span> Please start an Ollama client to
+			manage models.
+		</div>
+	{/if}
+
+	<form on:submit|preventDefault={addModel} class="space-y-4">
 		<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 			<div>
-				<Label for="model-name" class="mb-2">Model Name</Label>
-				<Input id="model-name" bind:value={newModelName} placeholder="Enter model name" />
+				<Label for="modelName">Model Name</Label>
+				<Input
+					id="modelName"
+					bind:value={newModelName}
+					placeholder="Enter model name"
+					disabled={!hasClients || loading}
+				/>
 			</div>
 			<div>
-				<Label for="model-path" class="mb-2">Model Path</Label>
-				<Input id="model-path" bind:value={newModelPath} placeholder="Enter model path" />
+				<Label for="modelPath">Model Path</Label>
+				<Input
+					id="modelPath"
+					bind:value={newModelPath}
+					placeholder="Enter model path"
+					disabled={!hasClients || loading}
+				/>
 			</div>
 		</div>
-		<Button class="mt-4" on:click={addModel} disabled={loading}>Add Model</Button>
-	</div>
+		<Button type="submit" disabled={!hasClients || loading}>
+			{#if loading}
+				Adding...
+			{:else}
+				Add Model
+			{/if}
+		</Button>
+	</form>
 
 	<Table striped={true}>
 		<TableHead>
@@ -107,7 +140,9 @@
 					<TableBodyCell>{model.name}</TableBodyCell>
 					<TableBodyCell>{model.path}</TableBodyCell>
 					<TableBodyCell>
-						<Button size="xs" color="red" on:click={() => removeModel(model)}>Remove</Button>
+						<Button size="xs" color="red" on:click={() => removeModel(model)} disabled={!hasClients}
+							>Remove</Button
+						>
 					</TableBodyCell>
 				</TableBodyRow>
 			{/each}

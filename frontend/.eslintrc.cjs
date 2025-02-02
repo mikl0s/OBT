@@ -20,7 +20,8 @@ module.exports = {
 				'@typescript-eslint/no-unused-vars': ['warn', { varsIgnorePattern: '^\\$\\$' }],
 				// Disable no-at-html-tags since we use DOMPurify for sanitization
 				'svelte/no-at-html-tags': 'off',
-				'svelte/valid-compile': 'error'
+				'svelte/valid-compile': 'error',
+				'no-undef': ['error', { typeof: true }]
 			}
 		}
 	],
@@ -37,6 +38,7 @@ module.exports = {
 	rules: {
 		'@typescript-eslint/no-explicit-any': 'warn',
 		'@typescript-eslint/explicit-function-return-type': 'off',
+		'no-undef': ['error', { typeof: true }],
 		'@typescript-eslint/no-unused-vars': [
 			'error',
 			{

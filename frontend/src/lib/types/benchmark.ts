@@ -1,10 +1,38 @@
+export interface CPUInfo {
+	name: string;
+	architecture: string;
+	base_clock: number;
+	boost_clock?: number;
+	cores: number;
+	threads: number;
+	core_types?: {
+		performance_cores?: number;
+		efficiency_cores?: number;
+	};
+	features: string[]; // AVX-512, AMX, etc.
+}
+
+export interface GPUInfo {
+	name: string;
+	vram_size: number; // in MB
+	vram_type: string; // GDDR6X, HBM2, etc.
+	tensor_cores?: number;
+	cuda_cores?: number;
+	compute_capability?: string;
+}
+
+export interface NPUInfo {
+	name?: string;
+	compute_power?: number; // TOPS
+	precision_support?: string[]; // INT8, FP16, etc.
+	dedicated?: boolean;
+}
+
 export interface HardwareInfo {
-	cpu_model: string;
-	cpu_cores: number;
-	cpu_threads: number;
-	ram_total: number;
-	gpu_model?: string;
-	gpu_memory?: number;
+	cpu: CPUInfo;
+	gpu?: GPUInfo;
+	npu?: NPUInfo;
+	total_memory: number; // System RAM in MB
 }
 
 export interface BenchmarkConfig {
@@ -30,19 +58,25 @@ export interface BenchmarkMetrics {
 export interface Client {
 	id: string;
 	name: string;
-	hardware: {
-		cpu: string;
-		threads: number;
-		memory: number;
-		gpu?: string;
-	};
+	hardware: HardwareInfo;
 	models: Model[];
 }
 
 export interface Model {
+	name: string;
+	client_id: string;
+	size: number;
+	modified: number;
+	digest: string;
+	version?: string;
+	tags?: string[];
+}
+
+export interface Prompt {
 	id: string;
 	name: string;
-	parameters: string;
+	content: string;
+	selected?: boolean;
 }
 
 export interface BenchmarkResult {

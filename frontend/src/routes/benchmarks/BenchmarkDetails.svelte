@@ -13,17 +13,65 @@
 	export let result: BenchmarkResult;
 
 	$: hardwareInfo = [
-		{ label: 'CPU Model', value: result.hardware_info.cpu_model },
-		{ label: 'CPU Cores', value: result.hardware_info.cpu_cores },
-		{ label: 'CPU Threads', value: result.hardware_info.cpu_threads },
-		{ label: 'RAM Total (GB)', value: (result.hardware_info.ram_total / 1024).toFixed(2) },
-		...(result.hardware_info.gpus.length > 0
-			? result.hardware_info.gpus
-					.map((gpu) => [
-						{ label: `GPU ${gpu.id} Model`, value: gpu.name },
-						{ label: `GPU ${gpu.id} Memory (GB)`, value: (gpu.memory_total / 1024).toFixed(2) }
-					])
-					.flat()
+		{ label: 'CPU Model', value: result.hardware_info.cpu.name },
+		{ label: 'CPU Architecture', value: result.hardware_info.cpu.architecture },
+		{ label: 'CPU Base Clock', value: `${result.hardware_info.cpu.base_clock} GHz` },
+		...(result.hardware_info.cpu.boost_clock
+			? [{ label: 'CPU Boost Clock', value: `${result.hardware_info.cpu.boost_clock} GHz` }]
+			: []),
+		{ label: 'CPU Cores', value: result.hardware_info.cpu.cores },
+		{ label: 'CPU Threads', value: result.hardware_info.cpu.threads },
+		...(result.hardware_info.cpu.core_types?.performance_cores
+			? [
+					{
+						label: 'Performance Cores',
+						value: result.hardware_info.cpu.core_types.performance_cores
+					}
+				]
+			: []),
+		...(result.hardware_info.cpu.core_types?.efficiency_cores
+			? [{ label: 'Efficiency Cores', value: result.hardware_info.cpu.core_types.efficiency_cores }]
+			: []),
+		{ label: 'CPU Features', value: result.hardware_info.cpu.features.join(', ') },
+		{ label: 'RAM Total (GB)', value: (result.hardware_info.total_memory / 1024).toFixed(2) },
+		...(result.hardware_info.gpu
+			? [
+					{ label: 'GPU Model', value: result.hardware_info.gpu.name },
+					{
+						label: 'GPU Memory',
+						value: `${(result.hardware_info.gpu.vram_size / 1024).toFixed(2)} GB ${result.hardware_info.gpu.vram_type}`
+					},
+					...(result.hardware_info.gpu.tensor_cores
+						? [{ label: 'Tensor Cores', value: result.hardware_info.gpu.tensor_cores }]
+						: []),
+					...(result.hardware_info.gpu.cuda_cores
+						? [{ label: 'CUDA Cores', value: result.hardware_info.gpu.cuda_cores }]
+						: []),
+					...(result.hardware_info.gpu.compute_capability
+						? [{ label: 'Compute Capability', value: result.hardware_info.gpu.compute_capability }]
+						: [])
+				]
+			: []),
+		...(result.hardware_info.npu
+			? [
+					{ label: 'NPU Model', value: result.hardware_info.npu.name || 'Unknown' },
+					...(result.hardware_info.npu.compute_power
+						? [
+								{
+									label: 'NPU Compute Power',
+									value: `${result.hardware_info.npu.compute_power} TOPS`
+								}
+							]
+						: []),
+					...(result.hardware_info.npu.precision_support
+						? [
+								{
+									label: 'NPU Precision Support',
+									value: result.hardware_info.npu.precision_support.join(', ')
+								}
+							]
+						: [])
+				]
 			: [])
 	];
 

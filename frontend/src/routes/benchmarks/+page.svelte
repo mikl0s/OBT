@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import {
 		Button,
 		Card,
@@ -30,6 +31,7 @@
 
 	let benchmarkResults: BenchmarkResult[] = [];
 	let isRunning = false;
+	let hasClients = false;
 
 	// Load saved benchmark config from localStorage or use defaults
 	const STORAGE_KEY = 'benchmark_config';
@@ -74,6 +76,18 @@
 			toast.error('Failed to delete benchmark');
 		}
 	}
+
+	// Check if we have any active clients
+	onMount(async () => {
+		try {
+			const response = await fetch('/api/v1/hardware');
+			const data = await response.json();
+			hasClients = Object.keys(data).length > 0;
+		} catch (error) {
+			console.error('Failed to check for active clients:', error);
+			hasClients = false;
+		}
+	});
 </script>
 
 <div class="container mx-auto p-4">
@@ -85,6 +99,12 @@
 
 	<Card>
 		<h2 class="mb-4 text-xl font-semibold">Benchmark Results</h2>
+		{#if !hasClients}
+			<div class="mb-4 rounded-lg bg-blue-50 p-4 text-sm text-blue-800" role="alert">
+				<span class="font-medium">No active clients available.</span> Please start an Ollama client to
+				run benchmarks.
+			</div>
+		{/if}
 
 		<Table striped={true}>
 			<TableHead>

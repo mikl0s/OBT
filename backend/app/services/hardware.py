@@ -1,17 +1,17 @@
 """Hardware information collection service."""
 
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Union
 
 from app.models.hardware import GPUInfo, HardwareInfo
 from app.services.ollama import get_active_clients, get_client, is_client_healthy
 
 
-async def get_system_info() -> Union[Dict[str, HardwareInfo], Dict[str, str]]:
+async def get_system_info() -> Union[Dict[str, HardwareInfo], Dict[str, Any]]:
     """Get system hardware information from active clients."""
     clients = await get_active_clients()
 
     if not clients:
-        return {"error": "No active clients available"}
+        return {}  # Return empty dict instead of error message
 
     # Return hardware info from all active clients
     client_hardware = {}

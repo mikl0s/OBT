@@ -60,14 +60,16 @@ async def client_heartbeat(
 ):
     """Update client heartbeat status."""
     try:
-        models = request.models if request else []
-        await ollama.update_client_status(client_id, version, available, models)
-
-        # Run cleanup after each heartbeat to quickly detect inactive clients
-        await ollama.cleanup_inactive_clients()
-
+        models = request.models if request and request.models else []
+        logger.info(f"Received heartbeat from {client_id} with {len(models)} models")
+        success = await ollama.handle_heartbeat(client_id, version, available, models)
+        if not success:
+            raise HTTPException(
+                status_code=400, detail="Failed to update client status"
+            )
         return {"status": "success"}
     except Exception as e:
+        logger.error(f"Error handling heartbeat from {client_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
