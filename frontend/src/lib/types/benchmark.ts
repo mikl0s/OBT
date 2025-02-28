@@ -55,11 +55,25 @@ export interface BenchmarkMetrics {
 	gpu_usage_percent?: number;
 }
 
-export interface Client {
+export interface ClientHardware {
+	cpu_threads: number;
+	gpu_count: number;
+	gpu_name?: string;
+	gpu_memory?: number;
+	cpu?: CPUInfo;
+	gpu?: GPUInfo;
+	npu?: NPUInfo;
+	total_memory?: number;
+}
+
+export interface ClientData {
 	id: string;
-	name: string;
-	hardware: HardwareInfo;
+	hardware: ClientHardware;
 	models: Model[];
+}
+
+export interface Client extends ClientData {
+	name: string;
 }
 
 export interface Model {
@@ -76,6 +90,7 @@ export interface Prompt {
 	id: string;
 	name: string;
 	content: string;
+	description: string;
 	selected?: boolean;
 }
 

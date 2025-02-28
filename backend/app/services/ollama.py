@@ -56,7 +56,7 @@ async def handle_heartbeat(
 
 async def get_client(client_id: str) -> Optional[Dict]:
     """Get client info by ID."""
-    if not await is_client_healthy(client_id):
+    if not is_client_healthy(client_id):
         return None
     return ollama_clients.get(client_id)
 
@@ -168,7 +168,7 @@ async def generate_completion(
         ) from e
 
 
-def is_client_healthy(client_id: str) -> bool:
+async def is_client_healthy(client_id: str) -> bool:
     """Check if client is healthy based on last heartbeat."""
     try:
         if client_id not in ollama_clients:

@@ -20,7 +20,38 @@
 
 	// Handle client selection
 	function handleClientChange(): void {
-		selectedClientData = clients.find((c) => c.id === selectedClient) || null;
+		const client = clients.find((c) => c.id === selectedClient);
+		if (client) {
+			selectedClientData = {
+				id: client.id,
+				hardware: {
+					cpu_threads: client.hardware.cpu_threads,
+					gpu_count: client.hardware.gpu_count,
+					gpu_name: client.hardware.gpu_name,
+					gpu_memory: client.hardware.gpu_memory,
+					cpu: {
+						name: 'Unknown',
+						architecture: 'x86_64',
+						base_clock: 0,
+						cores: client.hardware.cpu_threads,
+						threads: client.hardware.cpu_threads,
+						features: []
+					},
+					gpu: client.hardware.gpu_name
+						? {
+								name: client.hardware.gpu_name,
+								vram_size: client.hardware.gpu_memory || 0,
+								vram_type: 'GDDR6',
+								compute_capability: 'Unknown'
+							}
+						: undefined,
+					total_memory: 0
+				},
+				models: client?.models || []
+			};
+		} else {
+			selectedClientData = null;
+		}
 		if (selectedClient) {
 			benchmarkStore.getModels(selectedClient);
 		}
@@ -58,7 +89,8 @@
 	// Check if benchmark can start
 	$: canStartBenchmark =
 		selectedClient &&
-		selectedClientData?.models?.length > 0 &&
+		selectedClientData?.models &&
+		selectedClientData.models.length > 0 &&
 		testPrompts.some((p) => p.selected) &&
 		selectedModels.length > 0;
 
@@ -121,38 +153,78 @@
 				<div class="space-y-3">
 					<h3 class="font-medium text-purple-400">CPU</h3>
 					<div class="space-y-2 text-sm">
-						<div>
-							<span class="text-gray-400">Model:</span>
-							<span class="ml-2 font-medium">{selectedClientData.hardware.cpu.name}</span>
-						</div>
-						<div>
-							<span class="text-gray-400">Architecture:</span>
-							<span class="ml-2">{selectedClientData.hardware.cpu.architecture}</span>
-						</div>
-						<div>
-							<span class="text-gray-400">Clock Speed:</span>
-							<span class="ml-2">
-								{selectedClientData.hardware.cpu.base_clock} GHz
-								{#if selectedClientData.hardware.cpu.boost_clock}
-									(Boost: {selectedClientData.hardware.cpu.boost_clock} GHz)
-								{/if}
-							</span>
-						</div>
-						<div>
-							<span class="text-gray-400">Cores/Threads:</span>
-							<span class="ml-2">
-								{selectedClientData.hardware.cpu.cores}/{selectedClientData.hardware.cpu.threads}
-								{#if selectedClientData.hardware.cpu.core_types}
-									({selectedClientData.hardware.cpu.core_types.performance_cores}P+
-									{selectedClientData.hardware.cpu.core_types.efficiency_cores}E)
-								{/if}
-							</span>
-						</div>
-						{#if selectedClientData.hardware.cpu.features?.length}
+						{#if selectedClientData?.hardware?.cpu}
 							<div>
-								<span class="text-gray-400">AI Features:</span>
-								<span class="ml-2">{selectedClientData.hardware.cpu.features.join(', ')}</span>
+								<span class="text-gray-400">Model:</span>
+								<span class="ml-2 font-medium">{selectedClientData?.hardware?.cpu?.name}</span>
 							</div>
+							<div>
+								<span class="text-gray-400">Architecture:</span>
+								<span class="ml-2">{selectedClientData?.hardware?.cpu?.architecture}</span>
+							</div>
+							<div>
+								<span class="text-gray-400">Clock Speed:</span>
+								<span class="ml-2">
+									{selectedClientData?.hardware?.cpu?.base_clock} GHz
+									{#if selectedClientData?.hardware?.cpu?.boost_clock}
+										(Boost: {selectedClientData?.hardware?.cpu?.boost_clock} GHz)
+									{/if}
+								</span>
+							</div>
+							<div>
+								<span class="text-gray-400">Cores/Threads:</span>
+								<span class="ml-2">
+									{selectedClientData?.hardware?.cpu?.cores}/{selectedClientData?.hardware?.cpu
+										?.threads}
+									{#if selectedClientData?.hardware?.cpu?.core_types}
+										({selectedClientData?.hardware?.cpu?.core_types.performance_cores}P+
+										{selectedClientData?.hardware?.cpu?.core_types.efficiency_cores}E)
+									{/if}
+								</span>
+							</div>
+							{#if selectedClientData?.hardware?.cpu?.features?.length}
+								<div>
+									<span class="text-gray-400">AI Features:</span>
+									<span class="ml-2">{selectedClientData?.hardware?.cpu?.features.join(', ')}</span>
+								</div>
+							{/if}
+						{/if}
+						=======
+						{#if selectedClientData?.hardware?.cpu}
+							<div>
+								<span class="text-gray-400">Model:</span>
+								<span class="ml-2 font-medium">{selectedClientData?.hardware?.cpu?.name}</span>
+							</div>
+							<div>
+								<span class="text-gray-400">Architecture:</span>
+								<span class="ml-2">{selectedClientData?.hardware?.cpu?.architecture}</span>
+							</div>
+							<div>
+								<span class="text-gray-400">Clock Speed:</span>
+								<span class="ml-2">
+									{selectedClientData?.hardware?.cpu?.base_clock} GHz
+									{#if selectedClientData?.hardware?.cpu?.boost_clock}
+										(Boost: {selectedClientData?.hardware?.cpu?.boost_clock} GHz)
+									{/if}
+								</span>
+							</div>
+							<div>
+								<span class="text-gray-400">Cores/Threads:</span>
+								<span class="ml-2">
+									{selectedClientData?.hardware?.cpu?.cores}/{selectedClientData?.hardware?.cpu
+										?.threads}
+									{#if selectedClientData?.hardware?.cpu?.core_types}
+										({selectedClientData?.hardware?.cpu?.core_types.performance_cores}P+
+										{selectedClientData?.hardware?.cpu?.core_types.efficiency_cores}E)
+									{/if}
+								</span>
+							</div>
+							{#if selectedClientData?.hardware?.cpu?.features?.length}
+								<div>
+									<span class="text-gray-400">AI Features:</span>
+									<span class="ml-2">{selectedClientData?.hardware?.cpu?.features.join(', ')}</span>
+								</div>
+							{/if}
 						{/if}
 					</div>
 				</div>
@@ -173,16 +245,44 @@
 										.vram_type}</span
 								>
 							</div>
-							{#if selectedClientData.hardware.gpu.tensor_cores}
+							{#if selectedClientData?.hardware?.gpu?.tensor_cores}
 								<div>
 									<span class="text-gray-400">Tensor Cores:</span>
-									<span class="ml-2">{selectedClientData.hardware.gpu.tensor_cores}</span>
+									<span class="ml-2">{selectedClientData?.hardware?.gpu?.tensor_cores}</span>
 								</div>
 							{/if}
-							{#if selectedClientData.hardware.gpu.compute_capability}
+							{#if selectedClientData?.hardware?.gpu?.compute_capability}
 								<div>
 									<span class="text-gray-400">Compute:</span>
-									<span class="ml-2">{selectedClientData.hardware.gpu.compute_capability}</span>
+									<span class="ml-2">{selectedClientData?.hardware?.gpu?.compute_capability}</span>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+				<!-- NPU Section -->
+				{#if selectedClientData?.hardware?.npu}
+					<div class="space-y-3">
+						<h3 class="font-medium text-blue-400">NPU</h3>
+						<div class="space-y-2 text-sm">
+							{#if selectedClientData?.hardware?.npu?.name}
+								<div>
+									<span class="text-gray-400">Model:</span>
+									<span class="ml-2 font-medium">{selectedClientData.hardware.npu.name}</span>
+								</div>
+							{/if}
+							{#if selectedClientData?.hardware?.npu?.compute_power}
+								<div>
+									<span class="text-gray-400">Performance:</span>
+									<span class="ml-2">{selectedClientData.hardware.npu.compute_power} TOPS</span>
+								</div>
+							{/if}
+							{#if selectedClientData?.hardware?.npu?.precision_support?.length}
+								<div>
+									<span class="text-gray-400">Precision:</span>
+									<span class="ml-2"
+										>{selectedClientData.hardware.npu.precision_support.join(', ')}</span
+									>
 								</div>
 							{/if}
 						</div>
@@ -219,10 +319,14 @@
 				{/if}
 
 				<!-- System Memory -->
-				<div class="col-span-3 mt-2 text-sm">
-					<span class="text-gray-400">System Memory:</span>
-					<span class="ml-2">{Math.round(selectedClientData.hardware.total_memory / 1024)} GB</span>
-				</div>
+				{#if selectedClientData?.hardware?.total_memory}
+					<div class="col-span-3 mt-2 text-sm">
+						<span class="text-gray-400">System Memory:</span>
+						<span class="ml-2"
+							>{Math.round(selectedClientData?.hardware?.total_memory / 1024)} GB</span
+						>
+					</div>
+				{/if}
 			</div>
 		{/if}
 	</div>
